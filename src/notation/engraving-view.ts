@@ -1,3 +1,5 @@
+import { fractionFromQuarters } from '../interpretation/duration.ts'
+import { buildMeasureContent } from '../interpretation/measure-content.ts'
 import { assignPianoStaffs, type PianoStaff } from '../interpretation/staff.ts'
 import type { Song } from '../song/song.ts'
 import { quartersInBar, quartersInNote, openingMeasures, notesBeginningInSpan } from './written-measures.ts'
@@ -14,7 +16,13 @@ export function renderEngraving(container: HTMLElement, song: Song): void {
   const measures = openingMeasures(interpretation)
   const signature = interpretation.timeSignature
   const pickup = interpretation.pickup
-  if (!measures.ready || signature === undefined || pickup?.present !== true) {
+  const ticksPerWrittenQuarter = interpretation.ticksPerWrittenQuarter
+  if (
+    !measures.ready ||
+    signature === undefined ||
+    pickup?.present !== true ||
+    ticksPerWrittenQuarter === undefined
+  ) {
     const message = document.createElement('p')
     message.className = 'engraving__message'
     message.textContent = measures.ready
@@ -37,8 +45,22 @@ export function renderEngraving(container: HTMLElement, song: Song): void {
   const row = document.createElement('div')
   row.className = 'engraving__row'
   row.append(
-    measureBlock(song, 'Bar 0', measures.pickup, quartersInNote(pickup.duration), barQuarters, staves.staffByTrack),
-    measureBlock(song, 'Bar 1', measures.firstFull, barQuarters, barQuarters, staves.staffByTrack),
+    measureBlock(
+      song,
+      'Bar 0',
+      measures.pickup,
+      quartersInNote(pickup.duration),
+      ticksPerWrittenQuarter,
+      staves.staffByTrack,
+    ),
+    measureBlock(
+      song,
+      'Bar 1',
+      measures.firstFull,
+      barQuarters,
+      ticksPerWrittenQuarter,
+      staves.staffByTrack,
+    ),
   )
   container.replaceChildren(title, row)
 }
@@ -48,7 +70,7 @@ function measureBlock(
   label: string,
   span: { startTick: number; endTick: number },
   spanQuarters: number,
-  barQuarters: number,
+  ticksPerWrittenQuarter: number,
   staffByTrack: ReadonlyMap<number, PianoStaff>,
 ): HTMLElement {
   const notes = notesBeginningInSpan(song.originalMidi.notes, span)
@@ -63,19 +85,24 @@ function measureBlock(
   ticks.className = 'engraving__ticks'
   ticks.textContent = `Ticks ${Math.round(span.startTick)}–${Math.round(span.endTick)}`
 
+  const content = buildMeasureContent({
+    notes,
+    span,
+    ticksPerWrittenQuarter,
+    staffByTrack,
+    measureQuarters: fractionFromQuarters(spanQuarters),
+  })
+  if (!content.ready) {
+    const message = document.createElement('p')
+    message.className = 'engraving__message'
+    message.textContent = content.message
+    item.append(name, ticks, message)
+    return item
+  }
+
   const frame = document.createElement('div')
   frame.className = 'measure'
-  frame.append(
-    measureSvg({
-      notes,
-      staffByTrack,
-      span,
-      spanQuarters,
-      barQuarters,
-      label,
-    }),
-  )
-
+  frame.append(measureSvg({ label, content }))
   item.append(name, ticks, frame)
   return item
 }

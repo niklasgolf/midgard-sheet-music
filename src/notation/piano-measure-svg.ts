@@ -10,58 +10,71 @@ import {
   staffTopY,
   TREBLE_BOTTOM_DIATONIC,
 } from '../engraving/geometry.ts'
-import { staffForTrack, type PianoStaff } from '../interpretation/staff.ts'
-import type { MidiNote } from '../midi/parse-midi.ts'
-import type { TickSpan } from './written-measures.ts'
+import { columnX, spaceColumns } from '../engraving/spacing.ts'
+import type { MeasureContent, MeasurePitch, StaffEvent } from '../interpretation/measure-content.ts'
+import { pitchCount } from '../interpretation/measure-content.ts'
+import type { PianoStaff } from '../interpretation/staff.ts'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
 const STAFF_INSET = 16
 const NOTE_AREA_LEFT = 40
 const NOTE_AREA_RIGHT = 32
-const FULL_BAR_WIDTH = 250
 const NOTE_RX = 8
 const NOTE_RY = 5.5
 const INK = '#2a1a0e'
 
 export function measureSvg(options: {
-  notes: readonly MidiNote[]
-  staffByTrack: ReadonlyMap<number, PianoStaff>
-  span: TickSpan
-  spanQuarters: number
-  barQuarters: number
   label: string
+  content: Extract<MeasureContent, { ready: true }>
 }): SVGSVGElement {
-  const noteArea = Math.max(96, (options.spanQuarters / options.barQuarters) * FULL_BAR_WIDTH)
-  const width = NOTE_AREA_LEFT + noteArea + NOTE_AREA_RIGHT
+  const spacing = spaceColumns({
+    onsets: options.content.columns.map((column) => column.onset),
+    measureQuarters: options.content.measureQuarters,
+    originX: NOTE_AREA_LEFT,
+  })
+  const width = spacing.contentRight + NOTE_AREA_RIGHT + STAFF_INSET
   const frame = grandStaffFrame()
   const staffLeft = STAFF_INSET
   const staffRight = width - STAFF_INSET
+  const notes = pitchCount(options.content)
 
   const svg = document.createElementNS(SVG_NS, 'svg')
   svg.setAttribute('viewBox', `0 0 ${width} ${frame.height}`)
   svg.setAttribute('width', String(width))
   svg.setAttribute('height', String(frame.height))
   svg.setAttribute('role', 'img')
-  svg.setAttribute('aria-label', `${options.label}, ${options.notes.length} notes`)
+  svg.setAttribute('aria-label', `${options.label}, ${notes} notes`)
 
   drawStaff(svg, staffLeft, staffRight, frame.trebleBottomY)
   drawStaff(svg, staffLeft, staffRight, frame.bassBottomY)
   drawRightBarline(svg, staffRight, frame.trebleBottomY, frame.bassBottomY)
 
-  const duration = options.span.endTick - options.span.startTick
-  for (const note of options.notes) {
-    const staff = staffForTrack(options.staffByTrack, note.track)
-    const bottomY = staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
-    const bottomDiatonic = staff === 'bass' ? BASS_BOTTOM_DIATONIC : TREBLE_BOTTOM_DIATONIC
-    const step = pitchStaffStep(note.midi, bottomDiatonic)
-    const y = noteheadY(bottomY, step)
-    const x = NOTE_AREA_LEFT + ((note.startTick - options.span.startTick) / duration) * noteArea
-    drawLedgerLines(svg, x, step, bottomY)
-    drawNotehead(svg, note, staff, x, y)
+  for (const column of options.content.columns) {
+    const x = columnX(spacing, column.onset)
+    for (const event of column.events) {
+      for (const pitch of event.pitches) {
+        drawPitch(svg, frame, event, pitch, x)
+      }
+    }
   }
 
   return svg
+}
+
+function drawPitch(
+  svg: SVGSVGElement,
+  frame: { trebleBottomY: number; bassBottomY: number },
+  event: StaffEvent,
+  pitch: MeasurePitch,
+  x: number,
+): void {
+  const bottomY = event.staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
+  const bottomDiatonic = event.staff === 'bass' ? BASS_BOTTOM_DIATONIC : TREBLE_BOTTOM_DIATONIC
+  const step = pitchStaffStep(pitch.midi, bottomDiatonic)
+  const y = noteheadY(bottomY, step)
+  drawLedgerLines(svg, x, step, bottomY)
+  drawNotehead(svg, pitch, event.staff, x, y)
 }
 
 function drawStaff(svg: SVGSVGElement, x1: number, x2: number, bottomY: number): void {
@@ -111,7 +124,7 @@ function drawLedgerLines(svg: SVGSVGElement, x: number, step: number, bottomY: n
 
 function drawNotehead(
   svg: SVGSVGElement,
-  note: MidiNote,
+  pitch: MeasurePitch,
   staff: PianoStaff,
   x: number,
   y: number,
@@ -122,8 +135,8 @@ function drawNotehead(
   head.setAttribute('rx', String(NOTE_RX))
   head.setAttribute('ry', String(NOTE_RY))
   head.setAttribute('fill', INK)
-  head.setAttribute('data-midi', String(note.midi))
-  head.setAttribute('data-start-tick', String(note.startTick))
+  head.setAttribute('data-midi', String(pitch.midi))
+  head.setAttribute('data-start-tick', String(pitch.startTick))
   head.setAttribute('data-staff', staff)
   svg.append(head)
 }
