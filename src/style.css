@@ -64,6 +64,80 @@ body {
   margin: 0;
 }
 
+.measure {
+  margin-top: 48px;
+  padding-top: 28px;
+  border-top: 1px solid #7a4e2d;
+}
+
+.measure__title {
+  margin: 0 0 8px;
+  color: #2a1a0e;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.measure__meta {
+  margin: 0 0 28px;
+  color: #4a3120;
+  font-size: 16px;
+}
+
+.measure__hands {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px;
+}
+
+.measure__hand {
+  padding: 18px 20px 8px;
+  background: #d4b48c;
+  border: 1px solid #7a4e2d;
+}
+
+.measure__hand-label {
+  margin: 0;
+  color: #2a1a0e;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.measure__track {
+  margin: 2px 0 12px;
+  color: #7a4e2d;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.measure__events {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.measure__event {
+  display: flex;
+  gap: 16px;
+  margin: 0;
+  padding: 8px 0;
+  border-top: 1px solid #7a4e2d;
+  color: #2a1a0e;
+}
+
+.measure__tick {
+  flex: 0 0 3.2em;
+  color: #5c4030;
+  font-variant-numeric: tabular-nums;
+}
+
+.measure__pitches {
+  font-weight: 600;
+}
+
 @media (max-width: 720px) {
   body {
     padding: 16px 12px 28px;
@@ -81,5 +155,18 @@ body {
 
   .sheet__subtitle {
     font-size: 16px;
+  }
+
+  .measure {
+    margin-top: 32px;
+  }
+
+  .measure__title {
+    font-size: 22px;
+  }
+
+  .measure__hands {
+    grid-template-columns: 1fr;
+    gap: 18px;
   }
 }
