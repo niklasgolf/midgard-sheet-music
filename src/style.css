@@ -138,6 +138,29 @@ body {
   font-weight: 600;
 }
 
+.reference {
+  margin-top: 48px;
+  padding-top: 28px;
+  border-top: 1px solid #7a4e2d;
+}
+
+.reference__title {
+  margin: 0 0 18px;
+  color: #2a1a0e;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.reference__frame {
+  display: block;
+  width: 100%;
+  height: 90vh;
+  min-height: 720px;
+  border: 1px solid #7a4e2d;
+  background: #fff;
+}
+
 @media (max-width: 720px) {
   body {
     padding: 16px 12px 28px;
@@ -168,5 +191,17 @@ body {
   .measure__hands {
     grid-template-columns: 1fr;
     gap: 18px;
+  }
+
+  .reference {
+    margin-top: 32px;
+  }
+
+  .reference__title {
+    font-size: 22px;
+  }
+
+  .reference__frame {
+    min-height: 520px;
   }
 }
