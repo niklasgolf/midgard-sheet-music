@@ -67,20 +67,22 @@ A MIDI file does not always contain everything a printed score needs. Our Chopin
 
 This is the musical information added or corrected after import. It is editable, and it is saved with the same Song.
 
-Examples, none of which have a finished field list yet:
+Song Settings, the panel on the parchment page, edits the composition-wide part of this interpretation:
 
-- Pickup measures, also called an anacrusis
+- Time signature, as a numerator and a denominator
+- Key signature, as a tonic and a mode such as A major
+- Pickup, also called an anacrusis: whether the piece has one, and, when it does, its written duration
+
+The pickup duration is a musical value: sixteenth, eighth, quarter, or half note. It is not a MIDI tick count. The screen shows every conventional major and minor key, with its number of sharps or flats. Those counts are not stored separately. They follow from the tonic and the mode.
+
+Song Settings is not the Music Editor. The Music Editor will be a later workstation for individual measures and notes. These composition-wide fields are stored now. The following are not:
+
 - Measure boundaries
-- Time signatures and key signatures
-- Musical durations and rhythmic interpretation, such as quarter note or eighth note
-- Voices and hand assignments
-- Rests
-- Pitch spelling
-- Ties and other relationships between notes
-- Corrections to how imported notes are understood
-- Other musical relationships we learn to represent later
+- Note-by-note corrections
+- Voices and hand assignments beyond the imported track names
+- Rests, ties, and spelling of individual notes
 
-A correction changes the Song's interpretation. It does not change the imported MIDI data sitting beside it in Part B. Part C can grow as our music theory becomes more precise. This document does not invent a complete schema for these fields.
+A correction changes the Song's interpretation. It does not change the imported MIDI data sitting beside it in Part B. Saving a new title or composer changes metadata only. The source MIDI filename stays as it was imported. Part C can grow. A later save of Song Settings replaces the fields above and leaves any other interpretation properties in place.
 
 **Raw MIDI timing and written interpretation stay distinct inside the same Song.**
 
@@ -98,11 +100,11 @@ The browser database is implemented.
 | TypeScript model | `Song` in `src/song/song.ts` |
 | Database module | `src/song/song-database.ts` |
 
-`Song` has `id`, `schemaVersion` (currently 1), `metadata`, `originalMidi`, and `musicalInterpretation`. `originalMidi` is the parser's own `MidiFile` type, not a second copy of those fields. The parser result is plain data, so IndexedDB structured clone can store it. `musicalInterpretation` is present and empty. Measure corrections are not stored yet.
+`Song` has `id`, `schemaVersion` (currently 1), `metadata`, `originalMidi`, and `musicalInterpretation`. `originalMidi` is the parser's own `MidiFile` type, not a second copy of those fields. The parser result is plain data, so IndexedDB structured clone can store it. `musicalInterpretation` starts empty. Song Settings can then store a time signature, a key signature, and a pickup on that same object. Measure boundaries are still not stored.
 
 The page asks IndexedDB for `chopin-prelude-op-28-no-7`. If that record is missing, `src/song/import-chopin-song.ts` parses `chopin-prelude-op-28-no-7-in-a-major.mid`, builds the Song, and inserts it. If the record is already there, the page loads it and does not write again. A reload therefore does not overwrite or duplicate the Song. The MIDI file is used only for that first insert.
 
-What the page shows is then read from the stored record: title, composer, note count, track count, and the notes inside `originalMidi`. The tick window `[0, 2000)` is only a temporary screen filter in `src/main.ts`. It is not saved as a measure boundary.
+What the page shows is then read from the stored record: title, composer, note count, track count, and the notes inside `originalMidi`. Song Settings fills its fields from that same record. A time signature or key that has not been saved is left unselected. The page does not invent 3/4 or A major from the Chopin PDF. The tick window `[0, 2000)` is only a temporary screen filter in `src/main.ts`. It is not saved as a measure boundary.
 
 The same store can later hold other compositions without a new database design:
 
@@ -120,7 +122,7 @@ A Song is a logical document: one structured object in IndexedDB. It is not nece
 
 IndexedDB storage is local to one browser, one site origin, and one browser profile. It does not follow a person to another computer by itself. It is not a reliable backup. Clearing the browser's site data can remove it.
 
-Part C still has no field list. Naming those fields before the musical model is clearer would freeze an early guess. The store itself is no longer a guess: one record per Song, with the import and the interpretation kept side by side. There is still no general file-picker import, no editor, and no portable Song file.
+The store is one record per Song, with the import and the interpretation kept side by side. Song Settings writes into that record with `replaceSong`. The write replaces the existing id and does not insert another Song. There is still no general file-picker import, no Music Editor, and no portable Song file.
 
 ## 4. How a Song moves through the application
 
@@ -132,7 +134,7 @@ The intended workflow has five steps.
 
 **Step 3 — Read the Song.** The page loads that record back from IndexedDB and uses it for the note panel and the storage status. A reload takes this path and does not parse the file again. This read is implemented.
 
-**Step 4 — Interpret and edit.** The user will correct or add musical information. Identifying an anacrusis is one example. The correction will be written into Part C of the same Song. This step is not implemented. No editing controls exist, and the provisional pickup is not stored.
+**Step 4 — Interpret and edit.** Song Settings is implemented. The user can set the title, composer, time signature, key signature, and pickup, then press Save Changes. The page validates the form, writes metadata and Part C, and reads the Song back. Reload restores those choices. The Music Editor, for measures and individual notes, is not implemented. The provisional tick boundaries from the PDF comparison are not stored.
 
 **Step 5 — Render.** A notation system will read the Song and draw it. The current page already reads the stored notes for its text panel. SVG rendering does not exist yet. The renderer must not open the MIDI file and must not own the stored musical facts.
 
@@ -278,13 +280,14 @@ Already implemented:
 - Import of the Chopin prelude as Song `chopin-prelude-op-28-no-7` when that id is absent
 - Loading that same record on later visits without parsing or overwriting it
 - A storage status panel whose title, id, note count, and track count come from the stored Song
+- Song Settings: title, composer, time signature, key signature, and pickup duration, saved into the existing Song
 - A local copy of the VexFlow source, kept as reference material and not used as our renderer
 
 Not yet implemented:
 
 - A general MIDI file picker
-- Editing Part C, including the pickup and any measure boundaries
-- Persistent corrections
+- The Music Editor for measures and individual notes
+- Measure boundaries and other note-level corrections
 - A display that uses a corrected measure structure
 - The traditional SVG renderer, 3A
 - The midGard renderer, 3B
@@ -313,18 +316,18 @@ Two further habits follow from these rules. We compare an interpretation with th
 SVG notation waits until the Song foundation works. The planned order is:
 
 1. Document the Song architecture. Done in this file, and revised as the store took shape.
-2. Define a minimal TypeScript Song interface, without freezing every future field. Done. Part C is still an empty object.
+2. Define a minimal TypeScript Song interface, without freezing every future field. Done. Part C now has the Song Settings fields, and it can still hold later properties beside them.
 3. Implement the IndexedDB `songs` object store. Done.
 4. Import the existing Chopin MIDI file and save it as one Song. Done for the first visit only.
 5. Verify that the parsed MIDI information is still there after the page is closed and opened again. Done for this first Song: a reload reads the record and does not replace it.
 6. Display musical information by reading the Song from IndexedDB. Done for the current text panel. The panel still uses a temporary tick window, which is not part of the stored interpretation.
-7. Introduce editable interpretation inside the Song, stored beside the import.
-8. Correct the pickup and the measure boundaries through that stored interpretation, and check them against the PDF.
-9. Develop a basic editor for the musical information, not for SVG elements.
+7. Introduce editable interpretation inside the Song, stored beside the import. Started: Song Settings saves the composition-wide fields. Measure and note editing are still ahead.
+8. Correct the pickup and the measure boundaries through that stored interpretation, and check them against the PDF. The pickup can now be recorded as a written note value. Its tick span, and the later barlines, are not saved yet.
+9. Develop the Music Editor for measures and notes, not for SVG elements.
 10. Implement traditional SVG notation, renderer 3A.
 11. Later, define the midGard notation rules, then implement renderer 3B.
 
-Steps 7 through 11 are still plans. SVG notation stays behind the Song foundation, which now exists but cannot be edited yet.
+Steps 8 through 11 are still plans. Song Settings is the editing that exists today. SVG notation stays behind it.
 
 ## 12. Open questions
 
@@ -333,7 +336,7 @@ These questions are deliberately unanswered.
 Music and interpretation:
 
 - How should MIDI timing be converted into symbolic rhythm, such as quarter notes and eighth notes, especially where the performance does not land on a perfect grid?
-- How should a pickup measure be represented in Part C?
+- Song Settings stores whether a pickup exists and which written note value it has. How should that value be aligned with MIDI ticks, and where do the following barlines belong?
 - How should a note that crosses a barline be stored: as one sounding event, as two tied written notes, or as both?
 - How should musical voices be represented when one hand plays more than one line?
 - How should rests be inferred when the MIDI file simply has silence?

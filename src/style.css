@@ -101,6 +101,126 @@ body {
   color: #2a1a0e;
 }
 
+.settings {
+  margin-top: 48px;
+  padding-top: 28px;
+  border-top: 1px solid #7a4e2d;
+}
+
+.settings__title {
+  margin: 0 0 8px;
+  color: #2a1a0e;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.settings__intro {
+  max-width: 40rem;
+  margin: 0 0 18px;
+  color: #4a3120;
+}
+
+.settings__form {
+  max-width: 36rem;
+}
+
+.settings__group {
+  margin: 0 0 18px;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+
+.settings__legend {
+  margin: 0 0 10px;
+  padding: 0;
+  color: #7a4e2d;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.settings__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 12px;
+  color: #2a1a0e;
+}
+
+.settings__field[hidden] {
+  display: none;
+}
+
+.settings__time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings__time input {
+  width: 4.5rem;
+}
+
+.settings__slash {
+  color: #2a1a0e;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.settings input:not([type='radio']),
+.settings select {
+  color: #2a1a0e;
+  font: inherit;
+  background: #f4e4cf;
+  border: 1px solid #7a4e2d;
+  padding: 6px 8px;
+}
+
+.settings__pickup {
+  margin-bottom: 12px;
+}
+
+.settings__choices {
+  display: flex;
+  gap: 18px;
+}
+
+.settings__choice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings__save {
+  color: #f4e4cf;
+  font: inherit;
+  background: #2a1a0e;
+  border: 1px solid #2a1a0e;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.settings__save:disabled,
+.settings input:disabled,
+.settings select:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.settings__status {
+  min-height: 1.5em;
+  margin: 12px 0 0;
+  color: #2a1a0e;
+}
+
+.settings__status--error {
+  color: #6b1d1d;
+}
+
 .measure {
   margin-top: 48px;
   padding-top: 28px;
@@ -232,6 +352,14 @@ body {
 
   .storage__facts dd {
     margin-bottom: 10px;
+  }
+
+  .settings {
+    margin-top: 32px;
+  }
+
+  .settings__title {
+    font-size: 22px;
   }
 
   .measure {

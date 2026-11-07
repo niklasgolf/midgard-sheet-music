@@ -18,6 +18,87 @@
         system.
       </p>
       <section class="storage" id="song-storage" aria-label="Song storage"></section>
+      <section class="settings" aria-labelledby="song-settings-title">
+        <h2 class="settings__title" id="song-settings-title">Song Settings</h2>
+        <p class="settings__intro">
+          Composition-wide information for this Song. Saving it does not change the imported MIDI.
+        </p>
+        <form class="settings__form" id="song-settings-form">
+          <fieldset class="settings__group">
+            <legend class="settings__legend">Metadata</legend>
+            <label class="settings__field" for="song-title">
+              Song title
+              <input id="song-title" name="title" type="text" autocomplete="off" />
+            </label>
+            <label class="settings__field" for="song-composer">
+              Composer
+              <input id="song-composer" name="composer" type="text" autocomplete="off" />
+            </label>
+          </fieldset>
+          <fieldset class="settings__group">
+            <legend class="settings__legend">Musical settings</legend>
+            <div class="settings__field">
+              <span id="time-signature-label">Time signature</span>
+              <span class="settings__time">
+                <input
+                  id="song-numerator"
+                  name="numerator"
+                  type="text"
+                  inputmode="numeric"
+                  maxlength="2"
+                  aria-labelledby="time-signature-label"
+                  aria-label="Time signature, upper number"
+                  autocomplete="off"
+                />
+                <span class="settings__slash" aria-hidden="true">/</span>
+                <select
+                  id="song-denominator"
+                  name="denominator"
+                  aria-labelledby="time-signature-label"
+                  aria-label="Time signature, lower number"
+                >
+                  <option value="">—</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="4">4</option>
+                  <option value="8">8</option>
+                  <option value="16">16</option>
+                  <option value="32">32</option>
+                </select>
+              </span>
+            </div>
+            <label class="settings__field" for="song-key">
+              Key signature
+              <select id="song-key" name="key"></select>
+            </label>
+            <fieldset class="settings__group settings__pickup">
+              <legend class="settings__legend">Pickup (anacrusis)</legend>
+              <div class="settings__choices">
+                <label class="settings__choice">
+                  <input name="pickup" type="radio" value="yes" />
+                  Yes
+                </label>
+                <label class="settings__choice">
+                  <input name="pickup" type="radio" value="no" />
+                  No
+                </label>
+              </div>
+            </fieldset>
+            <label class="settings__field" for="song-pickup-duration" data-pickup-duration hidden>
+              Pickup duration
+              <select id="song-pickup-duration" name="pickupDuration">
+                <option value="">Choose a note value</option>
+                <option value="sixteenth">Sixteenth note</option>
+                <option value="eighth">Eighth note</option>
+                <option value="quarter">Quarter note</option>
+                <option value="half">Half note</option>
+              </select>
+            </label>
+          </fieldset>
+          <button class="settings__save" type="submit">Save Changes</button>
+          <p class="settings__status" id="song-settings-status" role="status" aria-live="polite"></p>
+        </form>
+      </section>
       <div class="measure" id="measure-1" aria-label="Notes from the stored Song"></div>
       <section class="reference">
         <h2 class="reference__title">Reference Sheet Music — Original PDF</h2>

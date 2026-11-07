@@ -42,6 +42,49 @@ export async function addSong(song: Song): Promise<void> {
   }
 }
 
+/**
+ * Replaces an existing Song record. Does not create a Song when the id is absent,
+ * so a save cannot insert a second copy under a new identity.
+ */
+export async function replaceSong(song: Song): Promise<void> {
+  if (!isSong(song)) {
+    throw new SongDatabaseError('The updated record is not a Song document.')
+  }
+  const database = await openSongDatabase()
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(SONG_STORE_NAME, 'readwrite')
+      const store = transaction.objectStore(SONG_STORE_NAME)
+      const lookup = store.get(song.id)
+      let settled = false
+      const fail = (error: DOMException | null, fallback: string) => {
+        if (settled) return
+        settled = true
+        reject(asDatabaseError(error, fallback))
+      }
+
+      lookup.onerror = () => fail(lookup.error, 'The existing Song could not be read.')
+      lookup.onsuccess = () => {
+        if (lookup.result === undefined) {
+          fail(null, `There is no saved Song with id ${song.id}.`)
+          transaction.abort()
+          return
+        }
+        const write = store.put(song)
+        write.onerror = () => fail(write.error, 'The Song could not be saved.')
+      }
+      transaction.onabort = () => fail(transaction.error, 'Saving the Song was aborted.')
+      transaction.oncomplete = () => {
+        if (settled) return
+        settled = true
+        resolve()
+      }
+    })
+  } finally {
+    database.close()
+  }
+}
+
 export async function getSong(id: string): Promise<Song | undefined> {
   const database = await openSongDatabase()
   try {
