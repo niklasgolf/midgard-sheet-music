@@ -84,6 +84,20 @@
                 </label>
               </div>
             </fieldset>
+            <label class="settings__field" for="song-ticks-per-quarter">
+              Ticks per written quarter
+              <input
+                id="song-ticks-per-quarter"
+                name="ticksPerQuarter"
+                type="text"
+                inputmode="decimal"
+                autocomplete="off"
+              />
+              <span class="settings__hint">
+                How many MIDI ticks last as long as one written quarter note. Leave this empty until
+                you choose a value. The file’s PPQ is not used automatically.
+              </span>
+            </label>
             <label class="settings__field" for="song-pickup-duration" data-pickup-duration hidden>
               Pickup duration
               <select id="song-pickup-duration" name="pickupDuration">
@@ -100,6 +114,7 @@
         </form>
       </section>
       <div class="measure" id="measure-1" aria-label="Notes from the stored Song"></div>
+      <section class="engraving" id="engraving" aria-labelledby="engraving-title"></section>
       <section class="reference">
         <h2 class="reference__title">Reference Sheet Music — Original PDF</h2>
         <iframe

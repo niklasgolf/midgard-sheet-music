@@ -221,6 +221,73 @@ body {
   color: #6b1d1d;
 }
 
+.settings__hint {
+  color: #4a3120;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.engraving {
+  margin-top: 48px;
+  padding-top: 28px;
+  border-top: 1px solid #7a4e2d;
+}
+
+.engraving__title {
+  margin: 0 0 12px;
+  color: #2a1a0e;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.engraving__message {
+  max-width: 40rem;
+  margin: 0;
+  color: #2a1a0e;
+}
+
+.engraving__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 72px;
+  margin: 36px 28px 8px;
+}
+
+.engraving__item {
+  max-width: 100%;
+}
+
+.engraving__label {
+  margin: 0;
+  color: #2a1a0e;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.engraving__ticks {
+  margin: 2px 0 12px;
+  color: #5c4030;
+  font-size: 14px;
+  text-align: center;
+}
+
+.engraving .measure {
+  margin: 0;
+  padding: 8px 4px 0;
+  border-top: 0;
+  background: transparent;
+}
+
+.engraving .measure svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
 .measure {
   margin-top: 48px;
   padding-top: 28px;
@@ -373,6 +440,19 @@ body {
   .measure__hands {
     grid-template-columns: 1fr;
     gap: 18px;
+  }
+
+  .engraving {
+    margin-top: 32px;
+  }
+
+  .engraving__title {
+    font-size: 22px;
+  }
+
+  .engraving__row {
+    gap: 36px;
+    margin: 24px 0 8px;
   }
 
   .reference {

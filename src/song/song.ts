@@ -41,6 +41,8 @@ export type MusicalInterpretation = {
   timeSignature?: TimeSignature
   keySignature?: KeySignature
   pickup?: PickupInterpretation
+  /** MIDI ticks that last as long as one written quarter note. Not the file PPQ. */
+  ticksPerWrittenQuarter?: number
 }
 
 export type Song = {
@@ -102,7 +104,17 @@ function isInterpretation(value: unknown): value is MusicalInterpretation {
     return false
   }
   if (interpretation.pickup !== undefined && !isPickup(interpretation.pickup)) return false
+  if (
+    interpretation.ticksPerWrittenQuarter !== undefined &&
+    !isTicksPerWrittenQuarter(interpretation.ticksPerWrittenQuarter)
+  ) {
+    return false
+  }
   return true
+}
+
+function isTicksPerWrittenQuarter(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
 }
 
 function isTimeSignature(value: unknown): value is TimeSignature {

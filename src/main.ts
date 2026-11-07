@@ -1,6 +1,7 @@
 import './style.css'
 import referencePdfUrl from '../pdf-files/chopin-prelude-op-28-no-7-in-a-major.pdf?url'
 import { previewSongTickWindow } from './midi/chopin-measure.ts'
+import { renderEngraving } from './notation/engraving-view.ts'
 import { renderMeasure, renderMeasureError } from './measure-view.ts'
 import { loadChopinSong, type SongLoad } from './song/import-chopin-song.ts'
 import { mountSongSettings } from './song/song-settings-view.ts'
@@ -16,11 +17,13 @@ const storage = document.querySelector<HTMLElement>('#song-storage')
 const measure = document.querySelector<HTMLElement>('#measure-1')
 const settingsForm = document.querySelector<HTMLFormElement>('#song-settings-form')
 const settingsStatus = document.querySelector<HTMLElement>('#song-settings-status')
-if (!storage || !measure || !settingsForm || !settingsStatus) {
+const engraving = document.querySelector<HTMLElement>('#engraving')
+if (!storage || !measure || !settingsForm || !settingsStatus || !engraving) {
   throw new Error('Song page containers were not found')
 }
 const storagePanel: HTMLElement = storage
 const measurePanel: HTMLElement = measure
+const engravingPanel: HTMLElement = engraving
 
 /**
  * Temporary screen filter. It is not saved on the Song and is not a verified barline.
@@ -47,6 +50,7 @@ loadChopinSong()
     renderSongStatusError(storagePanel, message)
     renderMeasureError(measurePanel, message)
     settingsStatus.textContent = message
+    engravingPanel.replaceChildren()
   })
 
 function renderStoredSong(load: SongLoad): void {
@@ -55,4 +59,5 @@ function renderStoredSong(load: SongLoad): void {
     measurePanel,
     previewSongTickWindow(load.song, developmentTickWindow.startTick, developmentTickWindow.endTick),
   )
+  renderEngraving(engravingPanel, load.song)
 }

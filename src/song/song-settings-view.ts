@@ -18,6 +18,7 @@ export function mountSongSettings(
   const denominator = requiredField<HTMLSelectElement>(form, 'denominator')
   const key = requiredField<HTMLSelectElement>(form, 'key')
   const pickupDuration = requiredField<HTMLSelectElement>(form, 'pickupDuration')
+  const ticksPerQuarter = requiredField<HTMLInputElement>(form, 'ticksPerQuarter')
   const durationField = form.querySelector<HTMLElement>('[data-pickup-duration]')
   const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')
   if (!durationField || !submit) {
@@ -42,7 +43,17 @@ export function mountSongSettings(
   return {
     show(song) {
       current = song
-      fillForm(song, { title, composer, numerator, denominator, key, pickupDuration, form, durationField })
+      fillForm(song, {
+        title,
+        composer,
+        numerator,
+        denominator,
+        key,
+        pickupDuration,
+        ticksPerQuarter,
+        form,
+        durationField,
+      })
       setEnabled(form, true)
       status.textContent = ''
       status.className = 'settings__status'
@@ -128,6 +139,7 @@ function fillForm(
     denominator: HTMLSelectElement
     key: HTMLSelectElement
     pickupDuration: HTMLSelectElement
+    ticksPerQuarter: HTMLInputElement
     form: HTMLFormElement
     durationField: HTMLElement
   },
@@ -143,6 +155,8 @@ function fillForm(
   setPickupChoice(fields.form, pickup?.present === true ? 'yes' : pickup?.present === false ? 'no' : '')
   fields.pickupDuration.value = pickup?.present === true ? pickup.duration : ''
   fields.durationField.hidden = pickup?.present !== true
+  fields.ticksPerQuarter.value =
+    interpretation.ticksPerWrittenQuarter === undefined ? '' : String(interpretation.ticksPerWrittenQuarter)
 }
 
 function readValues(form: HTMLFormElement): SettingsFormValues {
@@ -154,6 +168,7 @@ function readValues(form: HTMLFormElement): SettingsFormValues {
     key: requiredField<HTMLSelectElement>(form, 'key').value,
     pickup: selectedPickup(form),
     pickupDuration: requiredField<HTMLSelectElement>(form, 'pickupDuration').value,
+    ticksPerQuarter: requiredField<HTMLInputElement>(form, 'ticksPerQuarter').value,
   }
 }
 

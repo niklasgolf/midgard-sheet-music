@@ -19,6 +19,7 @@ export type SettingsFormValues = {
   key: string
   pickup: 'yes' | 'no' | ''
   pickupDuration: string
+  ticksPerQuarter: string
 }
 
 export type SongSettingsInput = {
@@ -27,6 +28,7 @@ export type SongSettingsInput = {
   timeSignature?: TimeSignature
   keySignature?: KeySignature
   pickup?: PickupInterpretation
+  ticksPerWrittenQuarter?: number
 }
 
 export type SettingsParse =
@@ -43,6 +45,7 @@ export function applySongSettings(song: Song, settings: SongSettingsInput): Song
   assignSetting(musicalInterpretation, 'timeSignature', settings.timeSignature)
   assignSetting(musicalInterpretation, 'keySignature', settings.keySignature)
   assignSetting(musicalInterpretation, 'pickup', settings.pickup)
+  assignSetting(musicalInterpretation, 'ticksPerWrittenQuarter', settings.ticksPerWrittenQuarter)
 
   return {
     id: song.id,
@@ -69,6 +72,8 @@ export function parseSongSettings(values: SettingsFormValues): SettingsParse {
   if (!keySignature.ok) return keySignature
   const pickup = parsePickup(values.pickup, values.pickupDuration)
   if (!pickup.ok) return pickup
+  const ticksPerWrittenQuarter = parseTicksPerQuarter(values.ticksPerQuarter)
+  if (!ticksPerWrittenQuarter.ok) return ticksPerWrittenQuarter
 
   return {
     ok: true,
@@ -78,6 +83,7 @@ export function parseSongSettings(values: SettingsFormValues): SettingsParse {
       timeSignature: timeSignature.value,
       keySignature: keySignature.value,
       pickup: pickup.value,
+      ticksPerWrittenQuarter: ticksPerWrittenQuarter.value,
     },
   }
 }
@@ -129,7 +135,19 @@ function isNoteValue(value: string): value is NoteValue {
   return NOTE_VALUES.some((noteValue) => noteValue === value)
 }
 
-function assignSetting<Key extends 'timeSignature' | 'keySignature' | 'pickup'>(
+function parseTicksPerQuarter(
+  text: string,
+): { ok: true; value: number | undefined } | { ok: false; message: string } {
+  const raw = text.trim()
+  if (raw === '') return { ok: true, value: undefined }
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value <= 0) {
+    return { ok: false, message: 'Ticks per written quarter must be a positive number.' }
+  }
+  return { ok: true, value }
+}
+
+function assignSetting<Key extends 'timeSignature' | 'keySignature' | 'pickup' | 'ticksPerWrittenQuarter'>(
   interpretation: MusicalInterpretation,
   key: Key,
   value: MusicalInterpretation[Key],
