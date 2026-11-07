@@ -80,6 +80,8 @@ function measureBlock(
     staffByTrack,
     measureQuarters: fractionFromQuarters(spanQuarters),
     sustainedNotes: song.musicalInterpretation.sustainedNotes,
+    writtenDurations: song.musicalInterpretation.writtenDurations,
+    graceNotes: song.musicalInterpretation.graceNotes,
   })
   const frame = document.createElement('div')
   frame.className = 'measure'

@@ -130,24 +130,31 @@ export function tieEndpoints(options: {
   }
 }
 
-/** One banana-shaped curve. Both edges bow the same way and meet at the ends. */
+/**
+ * One banana-shaped curve. Both edges bow the same way and meet at the ends.
+ * `bow` and `thickness` keep the shared tie look when they are omitted.
+ */
 export function tieCurve(options: {
   startX: number
   endX: number
   startY: number
   endY: number
   side: StemDirection
+  bow?: number
+  thickness?: number
 }): TieCurve {
+  const bow = options.bow ?? TIE_BOW
+  const thickness = options.thickness ?? TIE_THICKNESS
   const midY = (options.startY + options.endY) / 2
   return {
     startX: options.startX,
     endX: options.endX,
     startY: options.startY,
     endY: options.endY,
-    outerY: midY + options.side * TIE_BOW,
-    innerY: midY + options.side * (TIE_BOW - TIE_THICKNESS),
-    thickness: TIE_THICKNESS,
-    bow: TIE_BOW,
+    outerY: midY + options.side * bow,
+    innerY: midY + options.side * (bow - thickness),
+    thickness,
+    bow,
     side: options.side,
   }
 }

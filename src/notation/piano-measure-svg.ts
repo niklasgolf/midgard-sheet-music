@@ -11,6 +11,18 @@ import {
   TREBLE_BOTTOM_DIATONIC,
 } from '../engraving/geometry.ts'
 import { defaultStemDirection, noteheadExtent, placeChordNoteheads, type StemDirection } from '../engraving/chord-offset.ts'
+import {
+  graceCenterX,
+  graceFlagCount,
+  graceFlagPath,
+  graceInkLeft,
+  graceRadii,
+  graceSlashLine,
+  graceSlur,
+  graceSlurPath,
+  graceStem,
+  GRACE_SCALE,
+} from '../engraving/grace-note.ts'
 import { appendDot, appendStem, durationHasStem, extentWithDots, placeAugmentationDots, stemGeometry } from '../engraving/symbols.ts'
 import { fractionKey } from '../interpretation/duration.ts'
 import { columnX, spaceColumns, type MeasureSpacing } from '../engraving/spacing.ts'
@@ -26,6 +38,7 @@ import {
 } from '../engraving/tie.ts'
 import type {
   MeasureContent,
+  MeasureGraceNote,
   MeasurePitch,
   MeasureTie,
   ProvisionalColumn,
@@ -65,6 +78,14 @@ export function measureSvg(options: {
         ? column.extent
         : { left: Math.max(current.left, column.extent.left), right: Math.max(current.right, column.extent.right) },
     )
+  }
+  for (const column of placed) {
+    const key = fractionKey(column.onset)
+    const current = extents.get(key)
+    const lead = graceLead(column, options.content.graceNotes)
+    if (current !== undefined && lead > current.left) {
+      extents.set(key, { left: lead, right: current.right })
+    }
   }
   const opensFromLeft = options.content.ties.some(
     (tie) => tie.role === 'incoming' || tie.role === 'continuation',
@@ -108,6 +129,7 @@ export function measureSvg(options: {
     }
   }
   drawTies(svg, frame, options.content.ties, placed, spacing, staffLeft, staffRight)
+  drawGraceNotes(svg, frame, options.content.graceNotes, placed, spacing)
 
   fitVerticalFrame(svg, width, frame.height)
   return svg
@@ -444,6 +466,156 @@ function drawTies(
     path.setAttribute('data-extent-min', String(extent.min))
     path.setAttribute('data-extent-max', String(extent.max))
     svg.append(path)
+  }
+}
+
+function graceLead(column: ReturnType<typeof placeColumn>, graceNotes: readonly MeasureGraceNote[]): number {
+  let lead = 0
+  for (const group of column.events) {
+    for (const head of group.heads) {
+      const attached = graceNotes.filter(
+        (grace) =>
+          grace.staff === group.event.staff &&
+          grace.principal.track === head.pitch.track &&
+          grace.principal.midi === head.pitch.midi &&
+          grace.principal.startTick === head.pitch.startTick,
+      )
+      if (attached.length === 0) continue
+      lead = Math.max(lead, graceInkLeft(attached.length, NOTE_RX) - head.offsetX)
+    }
+  }
+  return lead
+}
+
+function drawGraceNotes(
+  svg: SVGSVGElement,
+  frame: { trebleBottomY: number; bassBottomY: number },
+  graceNotes: readonly MeasureGraceNote[],
+  placed: ReturnType<typeof placeColumn>[],
+  spacing: MeasureSpacing,
+): void {
+  for (const column of placed) {
+    const anchorX = columnX(spacing, column.onset)
+    for (const group of column.events) {
+      for (const head of group.heads) {
+        const attached = graceNotes
+          .filter(
+            (grace) =>
+              grace.staff === group.event.staff &&
+              grace.principal.track === head.pitch.track &&
+              grace.principal.midi === head.pitch.midi &&
+              grace.principal.startTick === head.pitch.startTick,
+          )
+          .sort((left, right) => right.startTick - left.startTick || right.midi - left.midi)
+        const principalX = anchorX + head.offsetX
+        const bottomY = group.event.staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
+        const principalY = noteheadY(bottomY, head.staffStep)
+        attached.forEach((grace, index) => {
+          drawOneGrace(svg, grace, index, principalX, principalY, bottomY)
+        })
+      }
+    }
+  }
+}
+
+function drawOneGrace(
+  svg: SVGSVGElement,
+  grace: MeasureGraceNote,
+  indexFromPrincipal: number,
+  principalX: number,
+  principalY: number,
+  bottomY: number,
+): void {
+  const bottom = grace.staff === 'bass' ? BASS_BOTTOM_DIATONIC : TREBLE_BOTTOM_DIATONIC
+  const step = pitchStaffStep(grace.midi, bottom)
+  const radii = graceRadii(NOTE_RX, NOTE_RY)
+  const x = graceCenterX(principalX, indexFromPrincipal, NOTE_RX)
+  const y = noteheadY(bottomY, step)
+  const direction = defaultStemDirection([step])
+  drawLedgerLines(svg, x, step, bottomY, INK)
+
+  const head = document.createElementNS(SVG_NS, 'ellipse')
+  head.setAttribute('cx', String(x))
+  head.setAttribute('cy', String(y))
+  head.setAttribute('rx', String(radii.x))
+  head.setAttribute('ry', String(radii.y))
+  head.setAttribute('fill', INK)
+  head.setAttribute('data-grace', 'true')
+  head.setAttribute('data-grace-scale', String(GRACE_SCALE))
+  head.setAttribute('data-midi', String(grace.midi))
+  head.setAttribute('data-start-tick', String(grace.startTick))
+  head.setAttribute('data-staff', grace.staff)
+  head.setAttribute('data-principal-start', String(grace.principal.startTick))
+  head.setAttribute('data-principal-midi', String(grace.principal.midi))
+  svg.append(head)
+
+  const stem = graceStem({ headX: x, headY: y, staffStep: step, noteRadiusX: NOTE_RX, direction })
+  if (stem !== undefined) {
+    const line = document.createElementNS(SVG_NS, 'line')
+    line.setAttribute('x1', String(stem.x))
+    line.setAttribute('x2', String(stem.x))
+    line.setAttribute('y1', String(stem.baseY))
+    line.setAttribute('y2', String(stem.tipY))
+    line.setAttribute('stroke', INK)
+    line.setAttribute('stroke-width', String(stem.thickness))
+    line.setAttribute('stroke-linecap', 'butt')
+    line.setAttribute('data-grace-stem', direction === 1 ? 'up' : 'down')
+    line.setAttribute('data-start-tick', String(grace.startTick))
+    svg.append(line)
+
+    const flags = graceFlagCount(grace.written)
+    for (let flagIndex = 0; flagIndex < flags; flagIndex += 1) {
+      const flag = graceFlagPath({ tipX: stem.x, tipY: stem.tipY, direction, index: flagIndex })
+      const path = document.createElementNS(SVG_NS, 'path')
+      path.setAttribute('d', flag.d)
+      path.setAttribute('fill', INK)
+      path.setAttribute('stroke', 'none')
+      path.setAttribute('data-grace-flag', grace.written)
+      path.setAttribute('data-start-tick', String(grace.startTick))
+      path.setAttribute('data-extent-min', String(flag.minY))
+      path.setAttribute('data-extent-max', String(flag.maxY))
+      svg.append(path)
+    }
+
+    if (grace.slash) {
+      const slash = graceSlashLine(stem)
+      const mark = document.createElementNS(SVG_NS, 'line')
+      mark.setAttribute('x1', String(slash.x1))
+      mark.setAttribute('y1', String(slash.y1))
+      mark.setAttribute('x2', String(slash.x2))
+      mark.setAttribute('y2', String(slash.y2))
+      mark.setAttribute('stroke', INK)
+      mark.setAttribute('stroke-width', String(stem.thickness))
+      mark.setAttribute('data-grace-slash', 'true')
+      mark.setAttribute('data-start-tick', String(grace.startTick))
+      svg.append(mark)
+    }
+  }
+
+  if (grace.slur && indexFromPrincipal === 0) {
+    const curve = graceSlur({
+      graceX: x,
+      graceY: y,
+      graceRadiusX: radii.x,
+      graceRadiusY: radii.y,
+      principalX,
+      principalY,
+      principalRadiusX: NOTE_RX,
+      principalRadiusY: NOTE_RY,
+    })
+    if (curve !== undefined) {
+      const slur = graceSlurPath(curve)
+      const path = document.createElementNS(SVG_NS, 'path')
+      path.setAttribute('d', slur.d)
+      path.setAttribute('fill', INK)
+      path.setAttribute('stroke', 'none')
+      path.setAttribute('data-grace-slur', 'true')
+      path.setAttribute('data-start-tick', String(grace.startTick))
+      path.setAttribute('data-principal-start', String(grace.principal.startTick))
+      path.setAttribute('data-extent-min', String(slur.min))
+      path.setAttribute('data-extent-max', String(slur.max))
+      svg.append(path)
+    }
   }
 }
 

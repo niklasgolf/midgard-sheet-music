@@ -51,6 +51,42 @@ export type SustainedNoteReading = {
 }
 
 /**
+ * One MIDI performance written with a duration other than the time the key was held.
+ * The identity is the original event. `writtenEndTick` is where the written note ends.
+ */
+export type WrittenDurationReading = {
+  track: number
+  midi: number
+  startTick: number
+  endTick: number
+  written: NoteValue
+  writtenEndTick: number
+}
+
+/** The written attack a grace note ornaments. This is a MIDI event, not a pixel. */
+export type GraceNotePrincipal = {
+  track: number
+  midi: number
+  startTick: number
+}
+
+/**
+ * One ornamental MIDI event written as a small note before its principal attack.
+ * Several readings may name the same principal. They do not add a counted beat.
+ */
+export type GraceNoteReading = {
+  track: number
+  midi: number
+  startTick: number
+  endTick: number
+  principal: GraceNotePrincipal
+  /** Flag and notehead value. This duration is not added to the measure. */
+  written: NoteValue
+  slash: boolean
+  slur: boolean
+}
+
+/**
  * Composition-wide musical decisions made after import.
  * Fields are omitted until Song Settings saves them.
  * Other properties may be added by later milestones and must be left in place.
@@ -66,6 +102,16 @@ export type MusicalInterpretation = {
    * Absent until an interpretation is stored. Drawing reads this list from the Song.
    */
   sustainedNotes?: readonly SustainedNoteReading[]
+  /**
+   * MIDI notes written with a rhythmic value other than the performed hold.
+   * Absent until an interpretation is stored.
+   */
+  writtenDurations?: readonly WrittenDurationReading[]
+  /**
+   * Short ornamental notes attached to a principal attack.
+   * Absent until an interpretation is stored.
+   */
+  graceNotes?: readonly GraceNoteReading[]
 }
 
 export type Song = {
@@ -137,6 +183,12 @@ function isInterpretation(value: unknown): value is MusicalInterpretation {
   if (interpretation.sustainedNotes !== undefined && !isSustainedNotes(interpretation.sustainedNotes)) {
     return false
   }
+  if (interpretation.writtenDurations !== undefined && !isWrittenDurations(interpretation.writtenDurations)) {
+    return false
+  }
+  if (interpretation.graceNotes !== undefined && !isGraceNotes(interpretation.graceNotes)) {
+    return false
+  }
   return true
 }
 
@@ -171,6 +223,73 @@ function isSustainedNote(value: unknown): value is SustainedNoteReading {
 function hasTieFlags(ties: unknown, writtenLength: number): boolean {
   if (ties === undefined) return true
   return Array.isArray(ties) && ties.length === writtenLength - 1 && ties.every((flag) => typeof flag === 'boolean')
+}
+
+function isWrittenDurations(value: unknown): value is readonly WrittenDurationReading[] {
+  return Array.isArray(value) && value.every(isWrittenDuration)
+}
+
+function isWrittenDuration(value: unknown): value is WrittenDurationReading {
+  if (!isSoundIdentity(value)) return false
+  const reading = value as Partial<WrittenDurationReading>
+  return (
+    isNoteValue(reading.written) &&
+    typeof reading.writtenEndTick === 'number' &&
+    Number.isFinite(reading.writtenEndTick) &&
+    reading.writtenEndTick > value.startTick
+  )
+}
+
+function isGraceNotes(value: unknown): value is readonly GraceNoteReading[] {
+  return Array.isArray(value) && value.every(isGraceNote)
+}
+
+function isGraceNote(value: unknown): value is GraceNoteReading {
+  if (!isSoundIdentity(value)) return false
+  const reading = value as Partial<GraceNoteReading>
+  return (
+    isNoteValue(reading.written) &&
+    (reading.slash === true || reading.slash === false) &&
+    (reading.slur === true || reading.slur === false) &&
+    isPrincipal(reading.principal)
+  )
+}
+
+function isPrincipal(value: unknown): value is GraceNotePrincipal {
+  if (value === null || typeof value !== 'object') return false
+  const principal = value as Partial<GraceNotePrincipal>
+  return (
+    Number.isInteger(principal.track) &&
+    principal.track !== undefined &&
+    principal.track >= 1 &&
+    Number.isInteger(principal.midi) &&
+    principal.midi !== undefined &&
+    principal.midi >= 0 &&
+    principal.midi <= 127 &&
+    typeof principal.startTick === 'number' &&
+    Number.isFinite(principal.startTick)
+  )
+}
+
+function isSoundIdentity(
+  value: unknown,
+): value is { track: number; midi: number; startTick: number; endTick: number } {
+  if (value === null || typeof value !== 'object') return false
+  const reading = value as Partial<SustainedNoteReading>
+  return (
+    Number.isInteger(reading.track) &&
+    reading.track !== undefined &&
+    reading.track >= 1 &&
+    Number.isInteger(reading.midi) &&
+    reading.midi !== undefined &&
+    reading.midi >= 0 &&
+    reading.midi <= 127 &&
+    typeof reading.startTick === 'number' &&
+    Number.isFinite(reading.startTick) &&
+    typeof reading.endTick === 'number' &&
+    Number.isFinite(reading.endTick) &&
+    reading.endTick > reading.startTick
+  )
 }
 
 function isTicksPerWrittenQuarter(value: unknown): value is number {

@@ -4,7 +4,7 @@ import { renderEngraving } from './notation/engraving-view.ts'
 import { renderMeasure, renderMeasureError } from './measure-view.ts'
 import { CHOPIN_SONG_ID, type SongLoad } from './song/import-chopin-song.ts'
 import { IndexedDBSongRepository } from './song/indexeddb-song-repository.ts'
-import { installSongBReadings } from './song/install-sustained-reading.ts'
+import { installSongBInterpretations } from './song/install-sustained-reading.ts'
 import { ensureProjectSongs, pdfUrlForSong } from './song/project-songs.ts'
 import type { SongRepository } from './song/song-repository.ts'
 import { mountSongLibrary } from './song/song-library-view.ts'
@@ -50,7 +50,7 @@ const settings = mountSongSettings(settingsForm, settingsStatus, songs, (song) =
 
 ensureProjectSongs(songs)
   .then(async (libraryLoad) => {
-    const correction = await installSongBReadings(songs)
+    const correction = await installSongBInterpretations(songs)
     librarySongs = libraryLoad.songs
     if (correction.status === 'installed') {
       librarySongs = librarySongs.map((song) => (song.id === correction.song.id ? correction.song : song))

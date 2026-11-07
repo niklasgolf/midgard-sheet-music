@@ -1,6 +1,6 @@
 import { readingJunctions } from '../interpretation/sustained-note.ts'
 import type { SongRepository } from './song-repository.ts'
-import type { Song, SustainedNoteReading } from './song.ts'
+import type { GraceNoteReading, Song, SustainedNoteReading, WrittenDurationReading } from './song.ts'
 
 /**
  * Song B's confirmed spelling of one MIDI sound.
@@ -42,6 +42,28 @@ export const SONG_B_READINGS: readonly SustainedNoteReading[] = [
   SONG_B_BAR11_CSHARP,
   SONG_B_BAR11_E,
 ]
+
+/** The sixteenth A4 in Bar 15. The key is released early, before the written note ends. */
+export const SONG_B_BAR15_A4_SIXTEENTH: WrittenDurationReading = {
+  track: 2,
+  midi: 69,
+  startTick: 16800,
+  endTick: 16852,
+  written: 'sixteenth',
+  writtenEndTick: 16896,
+}
+
+/** The grace-note A4 in Bar 15. It ornaments the A4 that begins on the next beat. */
+export const SONG_B_BAR15_A4_GRACE: GraceNoteReading = {
+  track: 2,
+  midi: 69,
+  startTick: 16852,
+  endTick: 16896,
+  principal: { track: 2, midi: 69, startTick: 16896 },
+  written: 'eighth',
+  slash: false,
+  slur: true,
+}
 
 export type SustainedReadingPlan =
   | { action: 'install'; song: Song }
@@ -194,7 +216,169 @@ export function installSongBReadings(repository: SongRepository): Promise<Sustai
   return installSustainedReadings(repository, SONG_B_ID, SONG_B_READINGS)
 }
 
-function sameSound(stored: SustainedNoteReading, reading: SustainedNoteReading): boolean {
+/**
+ * Decide whether one written-duration override can be added.
+ * A matching override is left alone. A different override for the same MIDI event is not replaced.
+ */
+export function planWrittenDuration(song: Song, reading: WrittenDurationReading): SustainedReadingPlan {
+  const stored = song.musicalInterpretation.writtenDurations ?? []
+  const sameEvent = stored.filter((entry) => sameSound(entry, reading))
+  if (sameEvent.some((entry) => entry.written !== reading.written || entry.writtenEndTick !== reading.writtenEndTick)) {
+    return {
+      action: 'conflict',
+      message: `Song ${song.id} already stores a different written duration for track ${reading.track}, MIDI ${reading.midi}, ticks ${reading.startTick}–${reading.endTick}. That duration was left in place.`,
+    }
+  }
+  if (sameEvent.length > 0) return { action: 'unchanged' }
+  if (!hasOneMidiEvent(song, reading)) {
+    return {
+      action: 'midi-mismatch',
+      message: `Song ${song.id} has no single MIDI note on track ${reading.track}, pitch ${reading.midi}, ticks ${reading.startTick}–${reading.endTick}. No written duration was saved.`,
+    }
+  }
+  return {
+    action: 'install',
+    song: {
+      ...song,
+      originalMidi: song.originalMidi,
+      musicalInterpretation: {
+        ...song.musicalInterpretation,
+        writtenDurations: [...stored, reading],
+      },
+    },
+  }
+}
+
+/**
+ * Decide whether one grace note can be added.
+ * A matching ornament is left alone. A different ornament for the same MIDI event is not replaced.
+ */
+export function planGraceNote(song: Song, reading: GraceNoteReading): SustainedReadingPlan {
+  const stored = song.musicalInterpretation.graceNotes ?? []
+  const sameEvent = stored.filter((entry) => sameSound(entry, reading))
+  if (sameEvent.some((entry) => !sameGrace(entry, reading))) {
+    return {
+      action: 'conflict',
+      message: `Song ${song.id} already stores a different grace note for track ${reading.track}, MIDI ${reading.midi}, ticks ${reading.startTick}–${reading.endTick}. That grace note was left in place.`,
+    }
+  }
+  if (sameEvent.length > 0) return { action: 'unchanged' }
+  if (!hasOneMidiEvent(song, reading)) {
+    return {
+      action: 'midi-mismatch',
+      message: `Song ${song.id} has no single MIDI note on track ${reading.track}, pitch ${reading.midi}, ticks ${reading.startTick}–${reading.endTick}. No grace note was saved.`,
+    }
+  }
+  const principals = song.originalMidi.notes.filter(
+    (note) =>
+      note.track === reading.principal.track &&
+      note.midi === reading.principal.midi &&
+      note.startTick === reading.principal.startTick,
+  )
+  if (principals.length !== 1) {
+    return {
+      action: 'midi-mismatch',
+      message: `Song ${song.id} has no single principal note on track ${reading.principal.track}, pitch ${reading.principal.midi}, tick ${reading.principal.startTick}. No grace note was saved.`,
+    }
+  }
+  return {
+    action: 'install',
+    song: {
+      ...song,
+      originalMidi: song.originalMidi,
+      musicalInterpretation: {
+        ...song.musicalInterpretation,
+        graceNotes: [...stored, reading],
+      },
+    },
+  }
+}
+
+/**
+ * Copy Song B's confirmed Part C readings into that record.
+ * Sustained notes, written durations, and grace notes already stored are not written again.
+ * One save covers every reading that was missing.
+ */
+export async function installSongBInterpretations(repository: SongRepository): Promise<SustainedReadingsInstall> {
+  const song = await repository.getSong(SONG_B_ID)
+  if (song === undefined) return { status: 'absent' }
+
+  let current = song
+  const problems: { status: 'conflict' | 'midi-mismatch'; message: string }[] = []
+  const added: Array<(stored: Song) => boolean> = []
+
+  const apply = (plan: SustainedReadingPlan, stillThere: (stored: Song) => boolean) => {
+    if (plan.action === 'install') {
+      current = plan.song
+      added.push(stillThere)
+      return
+    }
+    if (plan.action === 'conflict' || plan.action === 'midi-mismatch') {
+      problems.push({ status: plan.action, message: plan.message })
+    }
+  }
+
+  for (const reading of SONG_B_READINGS) {
+    apply(planSustainedReading(current, reading), (stored) => planSustainedReading(stored, reading).action === 'unchanged')
+  }
+  apply(
+    planWrittenDuration(current, SONG_B_BAR15_A4_SIXTEENTH),
+    (stored) => planWrittenDuration(stored, SONG_B_BAR15_A4_SIXTEENTH).action === 'unchanged',
+  )
+  apply(
+    planGraceNote(current, SONG_B_BAR15_A4_GRACE),
+    (stored) => planGraceNote(stored, SONG_B_BAR15_A4_GRACE).action === 'unchanged',
+  )
+
+  if (added.length === 0) {
+    if (problems.length === 0) return { status: 'unchanged' }
+    const status = problems.every((problem) => problem.status === 'midi-mismatch') ? 'midi-mismatch' : 'conflict'
+    return { status, message: problems.map((problem) => problem.message).join(' ') }
+  }
+
+  await repository.saveSong(current)
+  const stored = await repository.getSong(SONG_B_ID)
+  if (stored === undefined) {
+    throw new Error(`The interpretation for ${SONG_B_ID} was saved but the Song could not be read back.`)
+  }
+  if (JSON.stringify(stored.originalMidi) !== JSON.stringify(song.originalMidi)) {
+    throw new Error(`Saving an interpretation changed the imported MIDI for ${SONG_B_ID}.`)
+  }
+  for (const stillThere of added) {
+    if (!stillThere(stored)) {
+      throw new Error(`An interpretation for ${SONG_B_ID} was not present after it was saved.`)
+    }
+  }
+  return { status: 'installed', song: stored, messages: problems.map((problem) => problem.message) }
+}
+
+function hasOneMidiEvent(song: Song, reading: { track: number; midi: number; startTick: number; endTick: number }): boolean {
+  const matches = song.originalMidi.notes.filter(
+    (note) =>
+      note.track === reading.track &&
+      note.midi === reading.midi &&
+      note.startTick === reading.startTick &&
+      note.endTick === reading.endTick,
+  )
+  const sounded = matches[0]
+  return matches.length === 1 && sounded !== undefined && sounded.durationTicks === sounded.endTick - sounded.startTick
+}
+
+function sameGrace(stored: GraceNoteReading, reading: GraceNoteReading): boolean {
+  return (
+    stored.written === reading.written &&
+    stored.slash === reading.slash &&
+    stored.slur === reading.slur &&
+    stored.principal.track === reading.principal.track &&
+    stored.principal.midi === reading.principal.midi &&
+    stored.principal.startTick === reading.principal.startTick
+  )
+}
+
+function sameSound(
+  stored: { track: number; midi: number; startTick: number; endTick: number },
+  reading: { track: number; midi: number; startTick: number; endTick: number },
+): boolean {
   return (
     stored.track === reading.track &&
     stored.midi === reading.midi &&

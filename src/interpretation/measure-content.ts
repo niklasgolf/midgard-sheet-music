@@ -1,5 +1,6 @@
 import type { MidiNote } from '../midi/parse-midi.ts'
-import type { SustainedNoteReading } from '../song/song.ts'
+import type { GraceNotePrincipal, GraceNoteReading, NoteValue, SustainedNoteReading, WrittenDurationReading } from '../song/song.ts'
+import { matchGraceNote } from './grace-note.ts'
 import type { PianoStaff } from './staff.ts'
 import {
   compareFractions,
@@ -11,6 +12,7 @@ import {
   type WrittenDuration,
 } from './duration.ts'
 import { planTies, spellMatchingReading, type PlannedTie, type WrittenSegment } from './sustained-note.ts'
+import { matchWrittenDuration } from './written-duration.ts'
 
 /** One written notehead. The MIDI record is not changed. */
 export type MeasurePitch = {
@@ -33,6 +35,20 @@ export type MeasurePitch = {
 /** A tie this measure draws. The role says which piece of the curve belongs here. */
 export type MeasureTie = PlannedTie & {
   staff: PianoStaff
+}
+
+/** A grace note drawn before its principal attack. It is not a rhythmic column. */
+export type MeasureGraceNote = {
+  midi: number
+  track: number
+  staff: PianoStaff
+  startTick: number
+  endTick: number
+  durationTicks: number
+  written: NoteValue
+  slash: boolean
+  slur: boolean
+  principal: GraceNotePrincipal
 }
 
 /** Notes on one staff that share an onset and a written duration. */
@@ -81,6 +97,7 @@ export type MeasureContent = {
   provisional: ProvisionalColumn[]
   unresolved: UnresolvedNote[]
   ties: MeasureTie[]
+  graceNotes: MeasureGraceNote[]
 }
 
 /**
@@ -94,18 +111,37 @@ export function buildMeasureContent(options: {
   measureQuarters: Fraction
   /** Explicit spellings of MIDI sounds that are written as several tied notes. */
   sustainedNotes?: readonly SustainedNoteReading[]
+  /** Performed holds written as a different rhythmic value. */
+  writtenDurations?: readonly WrittenDurationReading[]
+  /** Ornamental notes attached to a principal attack. */
+  graceNotes?: readonly GraceNoteReading[]
 }): MeasureContent {
   const unresolved: UnresolvedNote[] = []
   const groups = new Map<string, StaffEvent>()
   const provisional = new Map<string, ProvisionalEvent>()
   const ties: MeasureTie[] = []
+  const graceNotes: MeasureGraceNote[] = []
   const spanTicks = options.span.endTick - options.span.startTick
   const readings = options.sustainedNotes ?? []
+  const writtenDurations = options.writtenDurations ?? []
+  const graceReadings = options.graceNotes ?? []
 
   for (const note of options.notes) {
     const segments = spellMatchingReading(note, readings, options.ticksPerWrittenQuarter)
     if (segments !== undefined) {
       placeSpelledNote(note, segments, options, groups, provisional, unresolved, ties, spanTicks)
+      continue
+    }
+    const grace = matchGraceNote(note, graceReadings)
+    if (grace !== undefined) {
+      if (beginsInSpan(note.startTick, options.span)) placeGraceNote(note, grace, options, graceNotes, unresolved)
+      continue
+    }
+    const written = matchWrittenDuration(note, writtenDurations, options.ticksPerWrittenQuarter)
+    if (written !== undefined) {
+      if (beginsInSpan(note.startTick, options.span)) {
+        placeOverriddenNote(note, written, options, groups, provisional, unresolved, spanTicks)
+      }
       continue
     }
     if (!beginsInSpan(note.startTick, options.span)) continue
@@ -132,6 +168,7 @@ export function buildMeasureContent(options: {
   unresolved.sort(
     (left, right) => left.startTick - right.startTick || left.track - right.track || left.midi - right.midi,
   )
+  graceNotes.sort((left, right) => left.startTick - right.startTick || left.midi - right.midi)
 
   return {
     ready: true,
@@ -140,7 +177,75 @@ export function buildMeasureContent(options: {
     provisional: provisionalColumns(provisional),
     unresolved,
     ties,
+    graceNotes,
   }
+}
+
+function placeGraceNote(
+  note: MidiNote,
+  reading: GraceNoteReading,
+  options: { staffByTrack: ReadonlyMap<number, PianoStaff> },
+  graceNotes: MeasureGraceNote[],
+  unresolved: UnresolvedNote[],
+): void {
+  const staff = options.staffByTrack.get(note.track)
+  if (staff === undefined) {
+    unresolved.push(unresolvedNote(note, `Track ${note.track} has no piano staff assignment.`))
+    return
+  }
+  graceNotes.push({
+    midi: note.midi,
+    track: note.track,
+    staff,
+    startTick: note.startTick,
+    endTick: note.endTick,
+    durationTicks: note.durationTicks,
+    written: reading.written,
+    slash: reading.slash,
+    slur: reading.slur,
+    principal: reading.principal,
+  })
+}
+
+function placeOverriddenNote(
+  note: MidiNote,
+  written: { duration: WrittenDuration; writtenEndTick: number; durationTicks: number },
+  options: {
+    span: { startTick: number; endTick: number }
+    ticksPerWrittenQuarter: number
+    staffByTrack: ReadonlyMap<number, PianoStaff>
+    measureQuarters: Fraction
+  },
+  groups: Map<string, StaffEvent>,
+  provisional: Map<string, ProvisionalEvent>,
+  unresolved: UnresolvedNote[],
+  spanTicks: number,
+): void {
+  const staff = options.staffByTrack.get(note.track)
+  if (staff === undefined) {
+    unresolved.push(unresolvedNote(note, `Track ${note.track} has no piano staff assignment.`))
+    return
+  }
+  const offsetTicks = note.startTick - options.span.startTick
+  const onset = interpretOnset(offsetTicks, options.ticksPerWrittenQuarter)
+  const pitch: MeasurePitch = {
+    midi: note.midi,
+    track: note.track,
+    startTick: note.startTick,
+    endTick: written.writtenEndTick,
+    durationTicks: written.durationTicks,
+    sounding: {
+      startTick: note.startTick,
+      endTick: note.endTick,
+      durationTicks: note.durationTicks,
+    },
+  }
+  if (!onset.recognized) {
+    unresolved.push(unresolvedNote(note, onset.message))
+    rememberProvisional(provisional, pitch, staff, offsetTicks, spanTicks, options.measureQuarters)
+    return
+  }
+  addPitch(groups, staff, onset.quarters, written.duration, pitch)
 }
 
 function placeSpelledNote(

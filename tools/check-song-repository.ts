@@ -6,11 +6,16 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseMidi } from '../src/midi/parse-midi.ts'
 import {
+  installSongBInterpretations,
   installSustainedReading,
   installSustainedReadings,
+  planGraceNote,
   planSustainedReading,
+  planWrittenDuration,
   SONG_B_BAR11_CSHARP,
   SONG_B_BAR11_E,
+  SONG_B_BAR15_A4_GRACE,
+  SONG_B_BAR15_A4_SIXTEENTH,
   SONG_B_BAR5_D4,
   SONG_B_ID,
   SONG_B_READINGS,
@@ -211,6 +216,62 @@ if (partialAgain.status !== 'conflict' || held.saved.length !== 1) fail('The con
 
 const invalid = planSustainedReading(original, { ...SONG_B_BAR11_CSHARP, ties: [true] })
 if (invalid.action !== 'conflict') fail('A tie list of the wrong length was planned for installation.')
+
+const withTies = songFor(SONG_B_ID, midi, {
+  ...settings,
+  sustainedNotes: [SONG_B_BAR5_D4, SONG_B_BAR11_CSHARP, SONG_B_BAR11_E],
+})
+const part = memoryRepository(withTies)
+const bar15 = await installSongBInterpretations(part.repository)
+if (bar15.status !== 'installed' || part.saved.length !== 1) fail('Bar 15 should be saved once beside the existing ties.')
+if (bar15.song.musicalInterpretation.sustainedNotes?.length !== 3) fail('Installing Bar 15 changed the sustained notes.')
+if (bar15.song.musicalInterpretation.sustainedNotes?.[0] !== withTies.musicalInterpretation.sustainedNotes?.[0]) {
+  fail('The stored Bar 5 reading was replaced.')
+}
+if (bar15.song.musicalInterpretation.writtenDurations?.length !== 1) fail('The sixteenth override was not stored.')
+if (bar15.song.musicalInterpretation.graceNotes?.length !== 1) fail('The grace note was not stored.')
+if (bar15.song.originalMidi !== withTies.originalMidi) fail('The Bar 15 install replaced the MIDI object.')
+if (JSON.stringify(bar15.song.originalMidi.notes) !== JSON.stringify(withTies.originalMidi.notes)) {
+  fail('The Bar 15 install changed a MIDI note.')
+}
+const bar15Again = await installSongBInterpretations(part.repository)
+if (bar15Again.status !== 'unchanged' || part.saved.length !== 1) fail('Bar 15 was written a second time.')
+
+const keptSettings = applySongSettings(bar15.song, {
+  title: bar15.song.metadata.title,
+  composer: bar15.song.metadata.composer,
+  timeSignature: settings.timeSignature,
+  keySignature: settings.keySignature,
+  pickup: settings.pickup,
+  ticksPerWrittenQuarter: settings.ticksPerWrittenQuarter,
+})
+if (keptSettings.musicalInterpretation.graceNotes?.length !== 1) fail('Song Settings removed the grace note.')
+if (keptSettings.musicalInterpretation.writtenDurations?.[0]?.writtenEndTick !== 16896) {
+  fail('Song Settings removed the written-duration override.')
+}
+if (!isSong(bar15.song)) fail('Song B with a grace note is not a valid Song document.')
+const brokenGrace = {
+  ...bar15.song,
+  musicalInterpretation: {
+    ...bar15.song.musicalInterpretation,
+    graceNotes: [{ ...SONG_B_BAR15_A4_GRACE, slash: 'yes' }],
+  },
+}
+if (isSong(brokenGrace)) fail('A grace note with a non-boolean slash was accepted.')
+
+const wrongDuration = planWrittenDuration(withTies, { ...SONG_B_BAR15_A4_SIXTEENTH, writtenEndTick: 17000 })
+if (wrongDuration.action !== 'install') fail('A first written-duration override should be stored.')
+const blockedDuration = planWrittenDuration(wrongDuration.song, SONG_B_BAR15_A4_SIXTEENTH)
+if (blockedDuration.action !== 'conflict') fail('A conflicting written duration replaced the stored one.')
+const wrongGrace = planGraceNote(withTies, { ...SONG_B_BAR15_A4_GRACE, slash: true })
+if (wrongGrace.action !== 'install') fail('A first grace note should be stored.')
+const blockedGrace = planGraceNote(wrongGrace.song, SONG_B_BAR15_A4_GRACE)
+if (blockedGrace.action !== 'conflict') fail('A conflicting grace note replaced the stored one.')
+const missingPrincipal = planGraceNote(withTies, {
+  ...SONG_B_BAR15_A4_GRACE,
+  principal: { track: 2, midi: 69, startTick: 1 },
+})
+if (missingPrincipal.action !== 'midi-mismatch') fail('A grace note with no principal note was stored.')
 
 const engineRoots = ['src/interpretation', 'src/engraving', 'src/notation']
 for (const root of engineRoots) {
