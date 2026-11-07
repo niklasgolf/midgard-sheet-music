@@ -14,7 +14,9 @@ import {
   defaultStemDirection,
   noteheadExtent,
   placeChordNoteheads,
+  type StemDirection,
 } from '../engraving/chord-offset.ts'
+import { appendStem, durationHasStem, stemGeometry } from '../engraving/symbols.ts'
 import { fractionKey } from '../interpretation/duration.ts'
 import { columnX, spaceColumns } from '../engraving/spacing.ts'
 import type { MeasureContent, MeasurePitch, RhythmicColumn, StaffEvent } from '../interpretation/measure-content.ts'
@@ -63,33 +65,82 @@ export function measureSvg(options: {
   drawRightBarline(svg, staffRight, frame.trebleBottomY, frame.bassBottomY)
 
   for (const column of placed) {
-    const x = columnX(spacing, column.onset)
-    for (const pitch of column.pitches) {
-      drawPitch(svg, frame, pitch.event, pitch.pitch, x + pitch.offsetX)
+    const anchorX = columnX(spacing, column.onset)
+    for (const group of column.events) {
+      drawEvent(svg, frame, group, anchorX)
     }
   }
 
   return svg
 }
 
+type PlacedHead = {
+  pitch: MeasurePitch
+  offsetX: number
+  staffStep: number
+  displaced: boolean
+}
+
+type PlacedEvent = {
+  event: StaffEvent
+  direction: StemDirection
+  heads: PlacedHead[]
+}
+
 function placeColumn(column: RhythmicColumn): {
   onset: RhythmicColumn['onset']
   extent: { left: number; right: number }
-  pitches: { event: StaffEvent; pitch: MeasurePitch; offsetX: number }[]
+  events: PlacedEvent[]
 } {
-  const pitches: { event: StaffEvent; pitch: MeasurePitch; offsetX: number }[] = []
+  const events: PlacedEvent[] = []
   const offsets: number[] = []
   for (const event of column.events) {
     const bottom = event.staff === 'bass' ? BASS_BOTTOM_DIATONIC : TREBLE_BOTTOM_DIATONIC
     const steps = event.pitches.map((pitch) => pitchStaffStep(pitch.midi, bottom))
-    const placed = placeChordNoteheads(steps, defaultStemDirection(steps), NOTEHEAD_WIDTH)
-    event.pitches.forEach((pitch, index) => {
-      const offsetX = placed[index]?.offsetX ?? 0
-      pitches.push({ event, pitch, offsetX })
+    const direction = defaultStemDirection(steps)
+    const placed = placeChordNoteheads(steps, direction, NOTEHEAD_WIDTH)
+    const heads = event.pitches.map((pitch, index) => {
+      const placement = placed[index]
+      const offsetX = placement?.offsetX ?? 0
       offsets.push(offsetX)
+      return {
+        pitch,
+        offsetX,
+        staffStep: placement?.staffStep ?? steps[index] ?? 0,
+        displaced: placement?.displaced ?? false,
+      }
     })
+    events.push({ event, direction, heads })
   }
-  return { onset: column.onset, extent: noteheadExtent(offsets, NOTEHEAD_WIDTH), pitches }
+  return { onset: column.onset, extent: noteheadExtent(offsets, NOTEHEAD_WIDTH), events }
+}
+
+function drawEvent(
+  svg: SVGSVGElement,
+  frame: { trebleBottomY: number; bassBottomY: number },
+  group: PlacedEvent,
+  anchorX: number,
+): void {
+  const bottomY = group.event.staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
+  if (durationHasStem(group.event.duration.base)) {
+    const stem = stemGeometry({
+      direction: group.direction,
+      noteheadRadiusX: NOTE_RX,
+      heads: group.heads.map((head) => ({
+        x: anchorX + head.offsetX,
+        y: noteheadY(bottomY, head.staffStep),
+        staffStep: head.staffStep,
+        displaced: head.displaced,
+      })),
+    })
+    const tick = group.heads[0]?.pitch.startTick
+    if (stem !== undefined && tick !== undefined) {
+      appendStem(svg, stem, INK, { staff: group.event.staff, startTick: tick })
+    }
+  }
+  for (const head of group.heads) {
+    drawPitch(svg, frame, group.event, head.pitch, anchorX + head.offsetX)
+  }
 }
 
 function drawPitch(

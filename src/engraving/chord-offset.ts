@@ -4,8 +4,9 @@
  * The walk follows VexFlow's StaveNote.buildNoteHeads: notes are visited from
  * the stem outward, and a note a second away from the previous one switches
  * sides. Stem up moves that note to the right. Stem down moves it to the left.
- * Stems are not drawn yet. The direction is an input so Step 4 can supply the
- * direction it actually draws.
+ *
+ * `defaultStemDirection` is the one stem-direction rule. Notehead displacement
+ * and the drawn stem both use the direction it returns.
  */
 
 /** Middle line of a five-line staff. Step 0 is the bottom line. */
