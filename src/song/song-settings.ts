@@ -51,9 +51,9 @@ export function applySongSettings(song: Song, settings: SongSettingsInput): Song
     id: song.id,
     schemaVersion: song.schemaVersion,
     metadata: {
+      ...song.metadata,
       title: settings.title,
       composer: settings.composer,
-      sourceFilename: song.metadata.sourceFilename,
     },
     originalMidi: song.originalMidi,
     musicalInterpretation,

@@ -8,6 +8,8 @@ export type SongMetadata = {
   title: string
   composer: string
   sourceFilename: string
+  /** Project PDF filename. Songs saved before the library may omit it. */
+  pdfFilename?: string
 }
 
 /** Written note value. This is not a MIDI tick count. */
@@ -72,7 +74,8 @@ function isMetadata(value: unknown): value is SongMetadata {
   return (
     typeof metadata.title === 'string' &&
     typeof metadata.composer === 'string' &&
-    typeof metadata.sourceFilename === 'string'
+    typeof metadata.sourceFilename === 'string' &&
+    (metadata.pdfFilename === undefined || typeof metadata.pdfFilename === 'string')
   )
 }
 
