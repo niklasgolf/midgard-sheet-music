@@ -2,6 +2,7 @@ import type { MidiNote } from '../midi/parse-midi.ts'
 import type { PianoStaff } from './staff.ts'
 import {
   compareFractions,
+  fraction,
   fractionKey,
   interpretDuration,
   interpretOnset,
@@ -32,6 +33,22 @@ export type RhythmicColumn = {
   events: StaffEvent[]
 }
 
+/**
+ * Notes whose written duration is unknown.
+ * They share a column when their MIDI onsets are the same tick.
+ * The onset fraction is that tick as a share of the measure, not a written rhythm.
+ */
+export type ProvisionalEvent = {
+  staff: PianoStaff
+  onset: Fraction
+  pitches: MeasurePitch[]
+}
+
+export type ProvisionalColumn = {
+  onset: Fraction
+  events: ProvisionalEvent[]
+}
+
 /** A MIDI note this measure could not turn into written notation. The MIDI values are unchanged. */
 export type UnresolvedNote = {
   midi: number
@@ -45,6 +62,7 @@ export type MeasureContent = {
   ready: true
   measureQuarters: Fraction
   columns: RhythmicColumn[]
+  provisional: ProvisionalColumn[]
   unresolved: UnresolvedNote[]
 }
 
@@ -60,6 +78,8 @@ export function buildMeasureContent(options: {
 }): MeasureContent {
   const unresolved: UnresolvedNote[] = []
   const groups = new Map<string, StaffEvent>()
+  const provisional = new Map<string, ProvisionalEvent>()
+  const spanTicks = options.span.endTick - options.span.startTick
 
   for (const note of options.notes) {
     const staff = options.staffByTrack.get(note.track)
@@ -71,12 +91,14 @@ export function buildMeasureContent(options: {
     const duration = interpretDuration(note.durationTicks, options.ticksPerWrittenQuarter)
     if (!duration.recognized) {
       unresolved.push(unresolvedNote(note, duration.message))
+      rememberProvisional(provisional, note, staff, note.startTick - options.span.startTick, spanTicks, options.measureQuarters)
       continue
     }
 
     const onset = interpretOnset(note.startTick - options.span.startTick, options.ticksPerWrittenQuarter)
     if (!onset.recognized) {
       unresolved.push(unresolvedNote(note, onset.message))
+      rememberProvisional(provisional, note, staff, note.startTick - options.span.startTick, spanTicks, options.measureQuarters)
       continue
     }
 
@@ -120,6 +142,7 @@ export function buildMeasureContent(options: {
     ready: true,
     measureQuarters: options.measureQuarters,
     columns: ordered,
+    provisional: provisionalColumns(provisional),
     unresolved,
   }
 }
@@ -129,6 +152,58 @@ export function pitchCount(content: MeasureContent): number {
     (sum, column) => sum + column.events.reduce((inner, event) => inner + event.pitches.length, 0),
     0,
   )
+}
+
+function rememberProvisional(
+  groups: Map<string, ProvisionalEvent>,
+  note: MidiNote,
+  staff: PianoStaff,
+  offsetTicks: number,
+  spanTicks: number,
+  measureQuarters: Fraction,
+): void {
+  const onset = tickShare(offsetTicks, spanTicks, measureQuarters)
+  const key = `${staff}|${fractionKey(onset)}`
+  const pitch = pitchFromNote(note)
+  const event = groups.get(key)
+  if (event === undefined) {
+    groups.set(key, { staff, onset, pitches: [pitch] })
+  } else {
+    event.pitches.push(pitch)
+  }
+}
+
+/**
+ * Where a MIDI note sits in the measure, as a fraction of the measure's written length.
+ * The tick is kept. It is not moved onto a beat, and it is not given a written duration.
+ */
+function tickShare(offsetTicks: number, spanTicks: number, measureQuarters: Fraction): Fraction {
+  const span = spanTicks > 0 ? spanTicks : 1
+  const offset = Math.min(Math.max(0, offsetTicks), span)
+  const scale = 1000000
+  return fraction(
+    Math.round(offset * scale) * measureQuarters.numerator,
+    Math.round(span * scale) * measureQuarters.denominator,
+  )
+}
+
+function provisionalColumns(groups: Map<string, ProvisionalEvent>): ProvisionalColumn[] {
+  const columns = new Map<string, ProvisionalColumn>()
+  for (const event of groups.values()) {
+    event.pitches.sort(comparePitches)
+    const key = fractionKey(event.onset)
+    const column = columns.get(key)
+    if (column === undefined) {
+      columns.set(key, { onset: event.onset, events: [event] })
+    } else {
+      column.events.push(event)
+    }
+  }
+  const ordered = [...columns.values()].sort((left, right) => compareFractions(left.onset, right.onset))
+  for (const column of ordered) {
+    column.events.sort((left, right) => (left.staff === right.staff ? 0 : left.staff === 'treble' ? -1 : 1))
+  }
+  return ordered
 }
 
 function unresolvedNote(note: MidiNote, reason: string): UnresolvedNote {

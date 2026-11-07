@@ -10,11 +10,18 @@ import {
   staffTopY,
   TREBLE_BOTTOM_DIATONIC,
 } from '../engraving/geometry.ts'
-import { defaultStemDirection, placeChordNoteheads, type StemDirection } from '../engraving/chord-offset.ts'
+import { defaultStemDirection, noteheadExtent, placeChordNoteheads, type StemDirection } from '../engraving/chord-offset.ts'
 import { appendDot, appendStem, durationHasStem, extentWithDots, placeAugmentationDots, stemGeometry } from '../engraving/symbols.ts'
 import { fractionKey } from '../interpretation/duration.ts'
 import { columnX, spaceColumns } from '../engraving/spacing.ts'
-import type { MeasureContent, MeasurePitch, RhythmicColumn, StaffEvent } from '../interpretation/measure-content.ts'
+import type {
+  MeasureContent,
+  MeasurePitch,
+  ProvisionalColumn,
+  ProvisionalEvent,
+  RhythmicColumn,
+  StaffEvent,
+} from '../interpretation/measure-content.ts'
 import { pitchCount } from '../interpretation/measure-content.ts'
 import type { PianoStaff } from '../interpretation/staff.ts'
 
@@ -26,6 +33,8 @@ const NOTE_AREA_RIGHT = 32
 const NOTE_RX = 8
 const NOTE_RY = 5.5
 const INK = '#2a1a0e'
+/** Unresolved MIDI notes. This color does not assign them a written duration. */
+const UNRESOLVED_INK = '#742D38'
 
 const NOTEHEAD_WIDTH = NOTE_RX * 2
 
@@ -34,9 +43,20 @@ export function measureSvg(options: {
   content: MeasureContent
 }): SVGSVGElement {
   const placed = options.content.columns.map((column) => placeColumn(column))
-  const extents = new Map(placed.map((column) => [fractionKey(column.onset), column.extent]))
+  const provisional = options.content.provisional.map((column) => placeProvisional(column))
+  const extents = new Map<string, { left: number; right: number }>()
+  for (const column of [...placed, ...provisional]) {
+    const key = fractionKey(column.onset)
+    const current = extents.get(key)
+    extents.set(
+      key,
+      current === undefined
+        ? column.extent
+        : { left: Math.max(current.left, column.extent.left), right: Math.max(current.right, column.extent.right) },
+    )
+  }
   const spacing = spaceColumns({
-    onsets: options.content.columns.map((column) => column.onset),
+    onsets: [...placed, ...provisional].map((column) => column.onset),
     measureQuarters: options.content.measureQuarters,
     originX: NOTE_AREA_LEFT,
     extents,
@@ -65,6 +85,12 @@ export function measureSvg(options: {
     const anchorX = columnX(spacing, column.onset)
     for (const group of column.events) {
       drawEvent(svg, frame, group, anchorX)
+    }
+  }
+  for (const column of provisional) {
+    const anchorX = columnX(spacing, column.onset)
+    for (const group of column.events) {
+      drawProvisional(svg, frame, group, anchorX)
     }
   }
 
@@ -161,6 +187,47 @@ function placeColumn(column: RhythmicColumn): {
   return { onset: column.onset, extent: extentWithDots(offsets, NOTEHEAD_WIDTH, dotCenters), events }
 }
 
+function placeProvisional(column: ProvisionalColumn): {
+  onset: ProvisionalColumn['onset']
+  extent: { left: number; right: number }
+  events: Array<ProvisionalEvent & { heads: PlacedHead[] }>
+} {
+  const events: Array<ProvisionalEvent & { heads: PlacedHead[] }> = []
+  const offsets: number[] = []
+  for (const event of column.events) {
+    const bottom = event.staff === 'bass' ? BASS_BOTTOM_DIATONIC : TREBLE_BOTTOM_DIATONIC
+    const steps = event.pitches.map((pitch) => pitchStaffStep(pitch.midi, bottom))
+    const placed = placeChordNoteheads(steps, defaultStemDirection(steps), NOTEHEAD_WIDTH)
+    const heads = event.pitches.map((pitch, index) => {
+      const placement = placed[index]
+      const offsetX = placement?.offsetX ?? 0
+      offsets.push(offsetX)
+      return {
+        pitch,
+        offsetX,
+        staffStep: placement?.staffStep ?? steps[index] ?? 0,
+        displaced: placement?.displaced ?? false,
+      }
+    })
+    events.push({ ...event, heads })
+  }
+  return { onset: column.onset, extent: noteheadExtent(offsets, NOTEHEAD_WIDTH), events }
+}
+
+function drawProvisional(
+  svg: SVGSVGElement,
+  frame: { trebleBottomY: number; bassBottomY: number },
+  group: ProvisionalEvent & { heads: PlacedHead[] },
+  anchorX: number,
+): void {
+  for (const head of group.heads) {
+    const x = anchorX + head.offsetX
+    const bottomY = group.staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
+    drawLedgerLines(svg, x, head.staffStep, bottomY, UNRESOLVED_INK)
+    drawNotehead(svg, head.pitch, group.staff, x, noteheadY(bottomY, head.staffStep), UNRESOLVED_INK)
+  }
+}
+
 function drawEvent(
   svg: SVGSVGElement,
   frame: { trebleBottomY: number; bassBottomY: number },
@@ -207,8 +274,8 @@ function drawPitch(
   const bottomDiatonic = event.staff === 'bass' ? BASS_BOTTOM_DIATONIC : TREBLE_BOTTOM_DIATONIC
   const step = pitchStaffStep(pitch.midi, bottomDiatonic)
   const y = noteheadY(bottomY, step)
-  drawLedgerLines(svg, x, step, bottomY)
-  drawNotehead(svg, pitch, event.staff, x, y)
+  drawLedgerLines(svg, x, step, bottomY, INK)
+  drawNotehead(svg, pitch, event.staff, x, y, INK)
 }
 
 function drawStaff(svg: SVGSVGElement, x1: number, x2: number, bottomY: number): void {
@@ -242,7 +309,7 @@ function drawRightBarline(
   svg.append(line)
 }
 
-function drawLedgerLines(svg: SVGSVGElement, x: number, step: number, bottomY: number): void {
+function drawLedgerLines(svg: SVGSVGElement, x: number, step: number, bottomY: number, color: string): void {
   for (const ledgerStep of ledgerSteps(step)) {
     const y = noteheadY(bottomY, ledgerStep)
     const line = document.createElementNS(SVG_NS, 'line')
@@ -250,7 +317,7 @@ function drawLedgerLines(svg: SVGSVGElement, x: number, step: number, bottomY: n
     line.setAttribute('x2', String(x + STAFF_SPACE))
     line.setAttribute('y1', String(y))
     line.setAttribute('y2', String(y))
-    line.setAttribute('stroke', INK)
+    line.setAttribute('stroke', color)
     line.setAttribute('stroke-width', '1.25')
     svg.append(line)
   }
@@ -262,15 +329,20 @@ function drawNotehead(
   staff: PianoStaff,
   x: number,
   y: number,
+  color: string,
 ): void {
   const head = document.createElementNS(SVG_NS, 'ellipse')
   head.setAttribute('cx', String(x))
   head.setAttribute('cy', String(y))
   head.setAttribute('rx', String(NOTE_RX))
   head.setAttribute('ry', String(NOTE_RY))
-  head.setAttribute('fill', INK)
+  head.setAttribute('fill', color)
   head.setAttribute('data-midi', String(pitch.midi))
   head.setAttribute('data-start-tick', String(pitch.startTick))
   head.setAttribute('data-staff', staff)
+  if (color === UNRESOLVED_INK) {
+    head.setAttribute('data-unresolved', 'true')
+    head.setAttribute('data-duration-ticks', String(pitch.durationTicks))
+  }
   svg.append(head)
 }
