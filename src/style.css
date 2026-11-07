@@ -15,12 +15,18 @@
 
 html,
 body {
+  height: 100%;
   margin: 0;
+  overflow: hidden;
 }
 
 body {
-  min-height: 100vh;
-  padding: 32px 20px 48px;
+  display: flex;
+  justify-content: center;
+  height: 100vh;
+  height: 100dvh;
+  padding-block: 20px;
+  padding-inline: 0;
   background: #0e1c2e;
   color: #3d2918;
   font-family: Palatino, 'Palatino Linotype', 'Iowan Old Style', Georgia, serif;
@@ -28,15 +34,55 @@ body {
   line-height: 1.55;
 }
 
-.sheet {
-  width: 100%;
-  max-width: 1200px;
-  min-height: calc(100vh - 80px);
-  margin: 0 auto;
-  padding: 52px 64px 64px;
+.workspace {
+  display: grid;
+  grid-template-columns: 1200px 1200px 800px;
+  grid-template-rows: minmax(0, 1fr);
+  width: 3200px;
+  max-width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
   background: #c7a47f;
   color: #3d2918;
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+}
+
+.panel {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: 28px 24px 32px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.panel--score,
+.panel--info {
+  border-left: 1px solid #7a4e2d;
+}
+
+.panel--score {
+  padding-inline: 16px;
+  overflow-x: auto;
+}
+
+.panel--reference {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  padding: 12px;
+  overflow: hidden;
+}
+
+.sheet {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
 }
 
 .sheet__intro {
@@ -60,7 +106,6 @@ body {
 }
 
 .sheet__lead {
-  max-width: 42rem;
   margin: 0;
 }
 
@@ -116,13 +161,12 @@ body {
 }
 
 .settings__intro {
-  max-width: 40rem;
   margin: 0 0 18px;
   color: #4a3120;
 }
 
 .settings__form {
-  max-width: 36rem;
+  max-width: none;
 }
 
 .settings__group {
@@ -173,6 +217,8 @@ body {
 
 .settings input:not([type='radio']),
 .settings select {
+  width: 100%;
+  max-width: 100%;
   color: #2a1a0e;
   font: inherit;
   background: #f4e4cf;
@@ -228,10 +274,8 @@ body {
 }
 
 .engraving {
-  margin-top: 48px;
-  padding-top: 28px;
-  border-top: 1px solid #7a4e2d;
-  overflow-x: auto;
+  margin: 0;
+  overflow: visible;
 }
 
 .engraving__title {
@@ -251,14 +295,14 @@ body {
 .engraving__grid {
   display: grid;
   grid-template-columns: repeat(3, max-content);
-  column-gap: 48px;
+  column-gap: 24px;
   row-gap: 48px;
   width: max-content;
   min-width: 100%;
   box-sizing: border-box;
-  margin: 36px auto 8px;
-  padding-inline: 24px;
-  justify-content: safe center;
+  margin: 28px auto 8px;
+  padding-inline: 8px;
+  justify-content: center;
   justify-items: center;
   align-items: start;
 }
@@ -407,37 +451,26 @@ body {
 }
 
 .reference {
-  margin-top: 48px;
-  padding-top: 28px;
-  border-top: 1px solid #7a4e2d;
-}
-
-.reference__title {
-  margin: 0 0 18px;
-  color: #2a1a0e;
-  font-size: 26px;
-  font-weight: 600;
-  line-height: 1.25;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
 }
 
 .reference__frame {
   display: block;
   width: 100%;
-  height: 90vh;
-  min-height: 720px;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
   border: 1px solid #7a4e2d;
   background: #fff;
 }
 
 @media (max-width: 720px) {
   body {
-    padding: 16px 12px 28px;
+    padding: 12px;
     font-size: 16px;
-  }
-
-  .sheet {
-    min-height: calc(100vh - 44px);
-    padding: 28px 18px 36px;
   }
 
   .sheet__title {
@@ -486,30 +519,13 @@ body {
     gap: 18px;
   }
 
-  .engraving {
-    margin-top: 32px;
-  }
-
   .engraving__title {
     font-size: 22px;
   }
 
   .engraving__grid {
-    column-gap: 32px;
+    column-gap: 24px;
     row-gap: 36px;
     margin: 24px auto 8px;
-    padding-inline: 12px;
-  }
-
-  .reference {
-    margin-top: 32px;
-  }
-
-  .reference__title {
-    font-size: 22px;
-  }
-
-  .reference__frame {
-    min-height: 520px;
   }
 }
