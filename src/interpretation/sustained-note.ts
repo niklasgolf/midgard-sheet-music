@@ -21,6 +21,8 @@ export type WrittenSegment = {
   endTick: number
   durationTicks: number
   duration: WrittenDuration
+  /** A tie continues from this written note into the next one. The last note is false. */
+  tiedToNext: boolean
 }
 
 /** How one tie meets the measure that is being drawn. */
@@ -63,6 +65,8 @@ export function spellSustainedNote(
   if (!sameSound(note, reading)) return undefined
   if (reading.written.length < 2) return undefined
   if (!Number.isFinite(ticksPerWrittenQuarter) || ticksPerWrittenQuarter <= 0) return undefined
+  const junctions = readingJunctions(reading)
+  if (junctions === undefined) return undefined
 
   let cursor = note.startTick
   const segments: WrittenSegment[] = []
@@ -84,6 +88,7 @@ export function spellSustainedNote(
       endTick,
       durationTicks,
       duration,
+      tiedToNext: junctions[index] ?? false,
     })
     cursor = endTick
   }
@@ -106,6 +111,19 @@ export function spellMatchingReading(
 }
 
 /**
+ * One boolean for each junction between written notes.
+ * A missing list means every junction is tied, which is how older readings were stored.
+ * The list is rejected when its length is not one shorter than the written spelling.
+ */
+export function readingJunctions(reading: Pick<SustainedNoteReading, 'written' | 'ties'>): boolean[] | undefined {
+  const count = reading.written.length - 1
+  if (count < 1) return undefined
+  if (reading.ties === undefined) return Array.from({ length: count }, () => true)
+  if (reading.ties.length !== count || reading.ties.some((flag) => typeof flag !== 'boolean')) return undefined
+  return [...reading.ties]
+}
+
+/**
  * Ties of one spelled sound that this measure must draw.
  * A chain across three or more measures gives the middle measure an incoming
  * tie and an outgoing tie. A measure with neither written note, while the tie
@@ -124,7 +142,7 @@ export function planTies(
   for (let index = 0; index < segments.length - 1; index += 1) {
     const left = segments[index]
     const right = segments[index + 1]
-    if (left === undefined || right === undefined) continue
+    if (left === undefined || right === undefined || left.tiedToNext === false) continue
     const leftHere = begins(left.startTick, start, end)
     const rightHere = begins(right.startTick, start, end)
     const role = tieRole(leftHere, rightHere, left.startTick, right.startTick, start, end)

@@ -3,7 +3,10 @@ import { previewSongTickWindow } from './midi/chopin-measure.ts'
 import { renderEngraving } from './notation/engraving-view.ts'
 import { renderMeasure, renderMeasureError } from './measure-view.ts'
 import { CHOPIN_SONG_ID, type SongLoad } from './song/import-chopin-song.ts'
+import { IndexedDBSongRepository } from './song/indexeddb-song-repository.ts'
+import { installSongBReadings } from './song/install-sustained-reading.ts'
 import { ensureProjectSongs, pdfUrlForSong } from './song/project-songs.ts'
+import type { SongRepository } from './song/song-repository.ts'
 import { mountSongLibrary } from './song/song-library-view.ts'
 import { mountSongSettings } from './song/song-settings-view.ts'
 import { renderSongStatus, renderSongStatusError } from './song/song-status-view.ts'
@@ -38,20 +41,36 @@ const library = mountSongLibrary(librarySelect, (song) => {
   showSong(song, false)
 })
 
-const settings = mountSongSettings(settingsForm, settingsStatus, (song) => {
+const songs: SongRepository = new IndexedDBSongRepository()
+
+const settings = mountSongSettings(settingsForm, settingsStatus, songs, (song) => {
   librarySongs = librarySongs.map((entry) => (entry.id === song.id ? song : entry))
   showSong(song, false)
 })
 
-ensureProjectSongs()
-  .then((libraryLoad) => {
+ensureProjectSongs(songs)
+  .then(async (libraryLoad) => {
+    const correction = await installSongBReadings(songs)
     librarySongs = libraryLoad.songs
+    if (correction.status === 'installed') {
+      librarySongs = librarySongs.map((song) => (song.id === correction.song.id ? correction.song : song))
+    }
     importedIds = new Set(libraryLoad.importedIds)
     const initial = librarySongs.find((song) => song.id === CHOPIN_SONG_ID) ?? librarySongs[0]
     if (!initial) {
       throw new Error('The song library is empty.')
     }
     showSong(initial, true)
+    const correctionMessage =
+      correction.status === 'conflict' || correction.status === 'midi-mismatch'
+        ? correction.message
+        : correction.status === 'installed'
+          ? correction.messages.join(' ')
+          : ''
+    if (correctionMessage !== '') {
+      settingsStatus.textContent = correctionMessage
+      settingsStatus.className = 'settings__status settings__status--error'
+    }
   })
   .catch((error: unknown) => {
     const message = error instanceof Error ? error.message : 'The stored Song could not be read.'

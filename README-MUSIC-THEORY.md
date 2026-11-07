@@ -112,7 +112,9 @@ A written note answers: how is that sound written in notation? It has a written 
 
 These are not necessarily one-to-one. **One MIDI note may become two, three, or more written notes.** The usual reason is a tie. The original MIDI event stays whole in Part B. The written notes, and the ties between them, belong in Part C.
 
-**Decided.** A tie connects consecutive written notes of the same pitch into one sustained musical sound. The listener hears one continuous tone. The page shows more than one notehead because a single written value does not cross the barline in the way the sound does, or because the sound is written as several values inside one measure.
+**Decided.** A tie connects two consecutive written notes of the same pitch into one sustained musical sound. The listener hears one continuous tone. The page shows more than one notehead because a single written value does not cross the barline in the way the sound does, or because the sound is written as several values inside one measure.
+
+**Implemented.** A spelling may also say which of those junctions are tied. For N written notes there are N − 1 junctions. `true` draws a tie. `false` writes the next note again without a tie: the MIDI sound is still one event, and the page shows a repeated written note. When the junction list is omitted, every junction is tied. The Bar 5 D4 was stored that way, and both of its ties remain. The flags name musical decisions. They do not name pixels.
 
 A slur is a different mark. A slur expresses phrasing or articulation. It may cover notes of different pitches. It does not add their durations together, and it does not turn several written notes into one sounding event. A curve above a melody can be a slur even while a shorter curve between two identical pitches is a tie. Both can appear in the same measure.
 
@@ -130,10 +132,10 @@ The general rule is musical, not a special case for one piece. The Chopin readin
 
 The page does not fill these in from the PDF, from PPQ, or from a time-signature event in the MIDI file. Until they are saved for that Song, the fields stay empty or unselected. Song A’s saved settings are never copied onto Song B.
 
-**Not stored yet.** The following belong in Part C, and the tie model among them is decided, but none of them is written into the Song today:
+**Implemented as written-note corrections.** A sustained MIDI sound that is written as several notes is stored on the Song as `sustainedNotes`. Each entry names the original event by track, pitch, onset, and ending, and lists the written values in order. An optional `ties` list has one boolean per junction. Omitted, it means every junction is tied. The entry stores those musical facts. It does not store notehead positions, curve coordinates, or SVG paths. Song B’s D4 and the two Bar 11 pitches in section 14 are stored corrections. The Music Editor does not edit this list yet. Song Settings does not show it, and saving Song Settings leaves the list in place.
 
-- The split of one MIDI note into several written notes
-- Ties between those written notes, including ties that cross one or more barlines
+**Not stored yet.** The following still belong in Part C, but they are not written into the Song today:
+
 - Measure boundaries, if we decide to save them rather than only derive them
 - Voices
 - Rests
@@ -162,11 +164,27 @@ In Song B’s file, PPQ is 384, and the development reading uses a written quart
 | Database version | 1 |
 | Object store | `songs`, with `id` as the key |
 | TypeScript model | `Song` in `src/song/song.ts` |
-| Database module | `src/song/song-database.ts` |
+| Song operations | `SongRepository` in `src/song/song-repository.ts` |
+| Current database | `IndexedDBSongRepository` in `src/song/indexeddb-song-repository.ts`, using `src/song/song-database.ts` |
 
-No schema migration was required for a second Song or for an optional PDF filename. `Song` has `id`, `schemaVersion` (currently 1), `metadata`, `originalMidi`, and `musicalInterpretation`. `originalMidi` is the parser’s own `MidiFile` type. The parser result is plain data, so IndexedDB structured clone can store it.
+No schema migration was required for a second Song, for an optional PDF filename, or for `sustainedNotes`. That field is optional on the interpretation the Song already stores. The database version stays 1. `Song` has `id`, `schemaVersion` (currently 1), `metadata`, `originalMidi`, and `musicalInterpretation`. `originalMidi` is the parser’s own `MidiFile` type. The parser result is plain data, so IndexedDB structured clone can store it.
 
-On startup, `ensureProjectSongs` looks up two project ids:
+### The repository
+
+The application asks a `SongRepository` for Songs. The interface is:
+
+- `getSong(id)` reads one Song, or reports that the id is absent
+- `listSongs()` reads the library
+- `addSong(song)` inserts a Song and fails if that id is already stored
+- `saveSong(song)` replaces an existing Song and fails if the id is absent
+
+Those methods exchange `Song` values. They do not mention IndexedDB records, indexes, or a future Convex document. `IndexedDBSongRepository` is the implementation used now. It calls the existing database functions. It does not open a second database and it does not change the store.
+
+This is dependency inversion. Interpretation and SVG engraving receive a Song, or the interpretation inside it. They do not import the repository, and they do not import IndexedDB. `src/main.ts` is the boundary that chooses `IndexedDBSongRepository` and passes it to the library import and to Song Settings.
+
+Convex is the planned database for the phase after this prototype can render a complete composition. It is not installed, and there is no Convex client or placeholder class. When that phase starts, a Convex repository can implement the same interface. The musical engine should not need to be rewritten to change databases.
+
+On startup, `ensureProjectSongs` looks up two project ids through the repository:
 
 | Song | Id | MIDI file | PDF file |
 |---|---|---|---|
@@ -175,9 +193,11 @@ On startup, `ensureProjectSongs` looks up two project ids:
 
 Song A’s id is the one already used by the first import. It is kept. Song B is a different record. If an id is already stored, that record’s MIDI and settings are left alone. If it is missing, the MIDI is parsed once and the Song is inserted with an empty interpretation. The dropdown is then filled from `listSongs()`, not from this table. A later import will appear there without a change to the menu.
 
-After a refresh, the page selects Song A when that id is present. It does not yet remember which Song was selected last. That memory is planned, not implemented.
+After the library is loaded, one install looks at Song B only. It carries the confirmed spellings: the Bar 5 D4, and the Bar 11 C♯5 and E5. Each spelling is added only when Part B still contains that exact MIDI event and Part C does not already spell it. Missing spellings are appended in one save. A second startup finds them and does not write. A Bar 5 reading stored without tie flags still means both junctions are tied, so the install does not rewrite it. If Part C already spells the same event with different written values or different tie flags, that stored spelling stays and the install says so. Song A is not part of the install. Parts A and B, and every other Part C field, stay as they were. This is not a schema migration. The database version stays 1.
 
-Song Settings updates the existing id with `replaceSong`. The write keeps the id, the schema version, the source filename, and the original MIDI. It does not insert a second Song, and it does not change any other Song.
+After a refresh, the page selects Song A when that id is present. It does not yet remember which Song was selected last. That memory is planned, not implemented. The saved spelling is still in Song B, and drawing reads it from the loaded record.
+
+Song Settings updates the existing id with `saveSong`. The write keeps the id, the schema version, the source filename, the original MIDI, and interpretation fields the form does not edit, including `sustainedNotes`. It does not insert a second Song, and it does not change any other Song.
 
 There is still no general file-picker import and no portable Song file.
 
@@ -189,7 +209,7 @@ There is still no general file-picker import and no portable Song file.
 
 **Read.** The library loads the stored Songs. Choosing one loads that record into the PDF, the SVG measures, the storage status, Song Settings, and the text note panel. A reload takes this path and does not parse again. This is implemented.
 
-**Interpret.** Song Settings can change the composition-wide fields of the selected Song and save them. The Music Editor, for individual notes and ties, is not implemented. Measure boundaries are derived for drawing. They are not stored as a list of ticks.
+**Interpret.** Song Settings can change the composition-wide fields of the selected Song and save them. A confirmed written spelling can also be stored in Part C, as Song B’s D4 is. The Music Editor, for individual notes and ties, is not implemented. Measure boundaries are derived for drawing. They are not stored as a list of ticks.
 
 **Render.** The text panel reads stored notes inside a temporary tick window. The SVG experiment reads the same Song and draws seventeen measures when the required settings exist. It does not open the MIDI file, and it does not store the picture.
 
@@ -316,9 +336,7 @@ The whole composition is not one enormous SVG. The right hand and the left hand 
 
 This is a rule for the picture. It is not a rule for the database. The Song remains one IndexedDB record, however many measure divs the page builds.
 
-**Implemented today.** A MIDI note is selected for a measure when its onset satisfies `startTick <= note.startTick < endTick`, after the span’s edges are rounded to whole ticks. The stored end of the note stays intact. The experiment does not split that note into tied written notes. If the whole duration is not a catalog value, the note stays unresolved. Its notehead is still drawn, in the measure where it begins, and it is not given an invented duration.
-
-**Decided, not implemented.** Interpretation will be allowed to place several written notes, in several measures, for one MIDI event. Each of those written notes is drawn only in its own measure SVG.
+**Implemented today.** A MIDI note is selected for a measure when its onset satisfies `startTick <= note.startTick < endTick`, after the span’s edges are rounded to whole ticks. The stored MIDI event stays intact. When Part C spells that event, each written note is drawn in the measure where that written note begins, and each tied junction is drawn in the SVG that contains it. A duration that is not a catalog value, and that has no stored spelling, stays unresolved. Its notehead is still drawn, in the measure where it begins, and it is not given an invented duration.
 
 ## 8. Musical graphics are SVG
 
@@ -486,17 +504,17 @@ Examples:
 - A system break, where a musical line continues on the next row
 - A clef or key signature that changes at a barline
 
-The musical fact stays in Part C. The curves are generated. None of these crossing symbols is drawn today.
+The musical fact stays in Part C. The curves are generated. A tie stored on the Song is drawn as Split Tie segments. Slurs, hairpins, and the other crossing marks are not drawn.
 
 ### The midGard Split Tie
 
-**Decided. Not implemented.**
+**Decided and implemented.**
 
 Traditional notation may draw a tie as one continuous curve from one notehead to the next. midGard Sheet Music cannot do that, because each measure is its own SVG. A curve is not allowed to leave its SVG and enter the next one.
 
 The visual analogy is a banana. Traditional notation is one whole banana between the two notes. midGard cuts that banana into pieces, with a very small visual gap. Each piece belongs entirely to its own measure. The pieces should still look like parts of one original curve.
 
-The system is not designed for only two measures. One sustained MIDI note may need written notes in three or more measures. When this is built, the interpretation will store the whole chain, and the renderer will generate:
+The system is not designed for only two measures. One sustained MIDI note may need written notes in three or more measures. The interpretation stores the written notes of the whole chain. The renderer generates:
 
 - an outgoing segment in the first measure, from the notehead toward that measure’s barline
 - a continuation segment in each intermediate measure
@@ -523,6 +541,12 @@ Matching requirements for those segments:
 
 A slur may later need the same independence, because it can also cross a barline. A slur still does not merge durations. Only the tie model above is decided. Hairpins and the other crossing marks remain open.
 
+A tie that begins and ends inside one measure is one complete curve in that measure’s SVG. It does not become a Split Tie. Bar 11’s two ties are complete curves. Bar 5’s second tie remains a Split Tie, with the outgoing piece in Bar 5 and the incoming piece in Bar 6.
+
+**Selective ties, implemented.** Three written notes have two junctions, and each junction is decided on its own. An omitted list ties every junction. A `false` junction is a repeated written note of the same MIDI sound: another notehead, and no curve between it and the note before it. The written durations still add up to the original MIDI duration.
+
+**Chord-aware tie direction, implemented.** A tied note that stands alone bows away from the middle line: downward below that line, and upward on or above it. The Bar 5 D4 uses that rule, so its curve still bows downward. When two or more tied notes share an onset, the lowest bows downward and the highest bows upward. A note between those outer notes bows toward the side with more room. The curves then sit outside the chord. The stroke width, the bow, and the gap before each notehead stay as they are. VexFlow’s `StaveTie` moves every note of a chord toward the stem. Two curves on that one side of a close dyad would run through the upper notehead, so this engine uses the outer sides instead. The direction is calculated from the tied notes at that onset. It is not a special case for one bar or one pitch.
+
 ## 13. Two notation systems read one Song
 
 The application has three layers. The Song is the middle one.
@@ -539,7 +563,7 @@ Layer 1 is the parser. Layer 2 is the authoritative musical store. Layer 3 only 
 
 3A is conventional Western notation: staves, clefs, noteheads, stems, beams, rests, barlines, and the other familiar symbols. A pianist who knows ordinary notation should be able to read it.
 
-3A uses our own SVG engraving engine, with one SVG per measure. The experiment has started that engine: staves, noteheads, ledger lines, stems, dots, chord placement, rhythmic spacing, and unresolved notes. It has not finished it. Ties, clefs, beams, rests, and accidentals are still absent.
+3A uses our own SVG engraving engine, with one SVG per measure. The experiment has started that engine: staves, noteheads, ledger lines, stems, dots, chord placement, rhythmic spacing, unresolved notes, and Split Tie segments for a spelling stored in Part C. It has not finished it. Clefs, beams, rests, and accidentals are still absent.
 
 ### 3B — midGard Sheet Music
 
@@ -646,7 +670,7 @@ The parser was right to report E4 from tick 0 to tick 667. The early mistake was
 
 ### Song B, Bar 5: one MIDI note, three written notes
 
-**Confirmed interpretation. Not implemented.**
+**Confirmed, stored in Part C, and drawn.**
 
 Song B contains one right-hand MIDI note that the current duration catalog cannot name. With a written quarter of 384 ticks, the note is:
 
@@ -672,11 +696,40 @@ The printed score shows that one sustained D4 as three written notes and two tie
 
 The first tie joins the sixteenth to the half note inside Bar 5. The second tie joins that half note to the half note in Bar 6. Both ties connect D4 to D4. They are not slurs.
 
-Part B keeps the single event from tick 5280 to tick 6912. Part C, when this reading is stored, will keep the three written notes and the two ties. The renderer will then draw a sixteenth and a half note in Bar 5’s SVG, a half note in Bar 6’s SVG, and the Split Tie segments that belong to each SVG. None of that split is performed today. The note is drawn as one unresolved crimson notehead in Bar 5, because 1632 ticks is not a whole, half, quarter, eighth, or sixteenth, with or without one dot.
+Part B keeps the single event from tick 5280 to tick 6912. Part C keeps the three written values, in that order, on `sustainedNotes`. The two ties are the connections between those consecutive values. They are not stored as curves. When the Song also has a time signature, a quarter-note pickup, and 384 ticks per written quarter, the renderer draws a black sixteenth and a black half note in Bar 5, a black half note in Bar 6, and the Split Tie segment that belongs to each SVG.
 
-This example is why the engine needs a general rule. A later piece can have the same shape: one key held across written values and across a barline. The code must not recognize “Chopin, pitch 62, tick 5280” and special-case it.
+The startup install described in section 4 copies this spelling into an existing Song B record when the MIDI event is still that note and Part C does not already spell it. Drawing does not consult a hardcoded fallback. If the record is missing the spelling, the D4 stays unresolved. If someone has already stored a different spelling of the same event, that spelling remains and the install does not replace it.
 
-The other four unresolved notes in this reading are not this tie. Two of them, in Bar 11, last 2.25 quarters and stop on the barline. Two of them, in Bar 15, are very short and together last one sixteenth. How those four should be written is still open. A different A4 in Bar 15 lasts exactly four quarters and crosses into Bar 16. The current catalog accepts that duration as a whole note, so it is not crimson. Whether it should instead be tied written notes is also still open.
+This example is why the engine needs a general rule. A later piece can have the same shape: one key held across written values and across a barline. The renderer does not recognize “Chopin, pitch 62, tick 5280.” It reads whatever spellings are saved on the Song it was given.
+
+### Bar 11, C♯5 and E5: one sound, a repeated written note
+
+Song B has two more sustained sounds that the duration catalog cannot name. Both are on track 2. Both start at tick 12192 and end at tick 13056. Each lasts 864 ticks, which is 2.25 written quarters when a written quarter is 384 ticks. Bar 11, in this reading, is ticks 11904–13056. Both sounds begin 288 ticks into the bar and end on its barline. Part B keeps each of them as one MIDI event. Nothing from either event continues into Bar 12.
+
+The printed score writes each sound as three notes inside Bar 11:
+
+| Written note | Ticks | Start | End | Tie into the next note |
+|---|---:|---:|---:|---|
+| Sixteenth | 96 | 12192 | 12288 | Yes |
+| Quarter | 384 | 12288 | 12672 | No |
+| Quarter | 384 | 12672 | 13056 | The sound has ended |
+
+96 + 384 + 384 = 864. The last quarter is a repeated written note of the same held key. The MIDI file does not contain a second note-on there. The short ties stay inside Bar 11, one for C♯5 (MIDI 73) and one for E5 (MIDI 76). They are complete curves in Bar 11’s SVG.
+
+Those two sixteenths form a chord, and their first quarters join the A5 and C♯6 quarters that already begin at tick 12288. The repeated quarters join the same two pitches again at tick 12672. C♯5 is the lower tied note, so its curve bows downward. E5 is the upper tied note, so its curve bows upward.
+
+Part C stores both decisions on `sustainedNotes`, beside the Bar 5 D4:
+
+```typescript
+{ track: 2, midi: 73, startTick: 12192, endTick: 13056, written: ['sixteenth', 'quarter', 'quarter'], ties: [true, false] }
+{ track: 2, midi: 76, startTick: 12192, endTick: 13056, written: ['sixteenth', 'quarter', 'quarter'], ties: [true, false] }
+```
+
+With a 3/4 time signature, a quarter-note pickup, and 384 ticks per written quarter, the renderer draws those six noteheads in black, the two short ties, and no tie between the quarters. The original MIDI events stay 864 ticks long.
+
+Two notes in Bar 15 are still unresolved. They are A4s on track 2, one of 52 ticks at onset 16800 and one of 44 ticks at onset 16852. Together they last one sixteenth. How they should be written is still open. A different A4 in Bar 15 lasts exactly four quarters and crosses into Bar 16. The current catalog accepts that duration as a whole note, so it is not crimson. Whether it should instead be tied written notes is also still open.
+
+Beams, phrase slurs, hairpins, and fingerings are still absent. Bar 11’s written durations and ties can be compared with the PDF. The measure is not yet a complete engraving of that bar.
 
 ## 15. The SVG experiment
 
@@ -696,18 +749,18 @@ The experiment does not yet draw:
 - Rests
 - Accidentals
 - Key or time signatures on the staff
-- Ties or slurs
-- A written duration invented for a note the catalog refused
+- Slurs
+- A written duration invented for a note the catalog refused and that Part C does not spell
 
-None of those should be described as present.
+A tie is drawn when Part C spells the MIDI sound as written notes. The phrase slur in the Chopin PDF is not that tie, and it is not drawn.
 
 ## 16. Where the engraving stands
 
 The first engraving target was a professionally readable Bar 0 and Bar 1. The experiment has since been widened to seventeen measures for whichever Song is selected. That widening did not delete or shorten either Song. Song A’s 176 notes and Song B’s 168 notes remain in IndexedDB.
 
-The engine stays general. Another Song, or a later measure, must be drawable without a new piece of Chopin-specific code. The Bar 5 reading is a musical conclusion about one MIDI event. It is not a renderer constant.
+The engine stays general. Another Song, or a later measure, must be drawable without a new piece of Chopin-specific drawing code. The Bar 5 reading is a musical conclusion stored on Song B. The renderer does not contain that Song’s id.
 
-Clefs, beams, rests, accidentals, music-font glyphs, and ties are the remaining engraving work. Ties are the next musical subject, and their architecture is the Split Tie in section 12. They are not the next lines of drawing code until that design has been reviewed.
+Clefs, beams, rests, accidentals, and music-font glyphs remain. The other unresolved notes, including Bars 11 and 15, are not spelled yet.
 
 ## 17. What works today, and what does not
 
@@ -728,23 +781,29 @@ Implemented:
 - Seventeen measure SVGs when the selected Song has a time signature, a pickup duration, and ticks per written quarter
 - Staff lines, barline, ledger lines, noteheads, chord offsets, stems, augmentation dots, and rhythmic spacing
 - Unresolved notes in Deep Crimson, with the original duration left unchanged
+- `SongRepository`, with IndexedDB as its current implementation
+- A written spelling of one MIDI sound in Part C, and the Split Tie segments drawn from that spelling
+- Song B’s Bar 5 D4 spelling, stored on that Song and restored from IndexedDB
+- Selective ties between written notes of one MIDI sound, including a repeated written note where a junction is untied
+- Chord-aware tie direction: a lone tie follows the middle line, and simultaneous ties sit on the outer sides of their chord
+- Song B’s Bar 11 C♯5 and E5 spellings, each a sixteenth tied to a quarter, then a repeated quarter, stored in Part C
 - A local copy of the VexFlow source, kept for study and not used as the renderer
 
 Decided, and not implemented:
 
-- One MIDI note may be stored in Part B and interpreted as several tied written notes in Part C
-- The Split Tie: coordinated curve segments, one in each measure SVG, including chains longer than two measures
-- The general musical rule that produces those written notes, with no Chopin-only exception
+- A procedure that discovers a written spelling from MIDI alone, for a duration the catalog cannot name
+- The Split Tie geometry applied to slurs and other crossing marks
 
 Not implemented:
 
 - Remembering the selected Song across a refresh
 - A general MIDI file picker
 - The Music Editor
-- Stored measure boundaries, ties, voices, rests, and spelling
+- Stored measure boundaries, voices, rests, and enharmonic spelling
 - Clefs, music-font glyphs, flags, beams, rests, accidentals, and key or time signatures on the staff
 - A layout manager for systems, page breaks, and pagination, beyond the current CSS Grid
-- Drawing a tie, a slur, or any other symbol that crosses measure SVGs
+- Drawing a slur, or any other non-tie symbol that crosses measure SVGs
+- Convex, or any database other than IndexedDB
 - The rest of traditional notation, 3A
 - midGard notation, 3B
 - Playback and a portable Song file
@@ -755,10 +814,10 @@ Not implemented:
 2. A measure is a graphical unit rendered from part of a Song, not a separate database record.
 3. Every Song contains its own imported MIDI information, and that information is preserved unchanged.
 4. Every Song contains its own editable musical interpretation, saved beside the import. One Song’s settings are never the settings of another.
-5. Adding another Song must not require song-specific application code.
+5. Adding another Song must not require song-specific engraving code. A correction that belongs to one existing record is data in that Song, installed outside the renderer.
 6. After import, editing and rendering read the Song from IndexedDB. Selecting a stored Song does not parse the MIDI again.
 7. A MIDI note is a sounding event. A written note is how that sound is notated. One MIDI note may become several written notes.
-8. A tie joins consecutive written notes of the same pitch into one sustained sound. A slur phrases. It does not add durations.
+8. A tie joins two consecutive written notes of the same pitch. A spelling may leave a later junction untied, so the same MIDI sound continues as a repeated written note. A slur phrases. It does not add durations.
 9. Musical meaning is stored. SVG is generated. Pixel coordinates are not the musical record.
 10. One measure is one HTML div and one complete SVG, with both piano staves inside it.
 11. A cross-measure tie is a musical relationship plus coordinated geometry, then independent curve segments. No SVG path extends into a neighboring SVG.
@@ -767,7 +826,9 @@ Not implemented:
 14. Traditional notation and midGard notation read the same Song and do not define it.
 15. VexFlow is a reference. Our Song and our measure SVG come first.
 16. MIDI parsing, musical editing, storage, engraving, and layout remain separate responsibilities.
-17. The system grows by small steps that can be seen, compared with the score, and kept.
+17. The music engine does not choose the database. Application code depends on `SongRepository`. IndexedDB is the current implementation. Convex is the intended later one, and it is not part of this prototype.
+18. A written-note correction is authoritative only when it is stored in that Song’s Part C.
+19. The system grows by small steps that can be seen, compared with the score, and kept.
 
 We compare an interpretation with the original PDF before treating it as settled. We do not add a dependency or an abstraction until it has a clear job.
 
@@ -775,7 +836,7 @@ We compare an interpretation with the original PDF before treating it as settled
 
 The early investigation of VexFlow, the Song model, and the first SVG has already been carried into the experiment described above. This README is not a numbered build plan.
 
-The next musical step is the tie model in sections 3, 6, and 12, starting from the confirmed D4 in Song B’s Bars 5 and 6. That step has not been implemented. It should not begin until this description has been reviewed.
+Song B’s Bar 5 D4 is stored as three written notes and drawn with a Split Tie. Song B’s Bar 11 C♯5 and E5 are stored as a sixteenth tied to a quarter, followed by a repeated quarter, with the two ties on opposite sides of the chord. Bar 15’s two short A4s are still unresolved. Beams, slurs, hairpins, and fingerings are not part of this step. The database remains IndexedDB until a complete composition can be rendered. Convex is the planned replacement, behind `SongRepository`, and it is not part of the current code.
 
 Each implementation step after that review should be small enough to:
 
@@ -794,8 +855,8 @@ These questions are deliberately unanswered. A decision elsewhere in this docume
 
 Music and interpretation:
 
-- How should the general tie rule choose written values when a MIDI duration is not itself a catalog value? The D4 in section 14 shows one confirmed result. The procedure that discovers that result for any Song is not chosen.
-- How should the other unresolved notes in these preludes be written, especially where a duration is only a sixteenth away from a half note, or where two very short notes together last one sixteenth?
+- How should the general tie rule choose written values when a MIDI duration is not itself a catalog value? Section 14 shows two confirmed results: the Bar 5 D4, and the Bar 11 sixteenth, quarter, and repeated quarter. The procedure that discovers a spelling for any Song is not chosen.
+- How should the remaining unresolved notes in these preludes be written? Bar 15 still has two very short A4s that together last one sixteenth, and one A4 that the catalog currently accepts as a whole note.
 - How should musical voices be represented when one hand plays more than one line?
 - How should rests be inferred when the MIDI file simply has silence?
 - Which decisions belong in the shared Song, and which belong only to 3A or only to 3B?
@@ -817,7 +878,7 @@ Storage and the life of a Song:
 
 - How should Song IDs be generated for a future import, beyond the two project ids?
 - How should the selected Song be remembered after a refresh?
-- How should the Song schema be versioned as Part C grows, and how should migrations update Songs saved by an older version?
+- How should the Song schema be versioned when a future change cannot be expressed as an optional field? Adding `sustainedNotes` did not require a new database version. A change that rewrites existing records still needs a plan.
 - How do we preserve imported events that the parser does not yet fully interpret, so a later parser can still see them?
 - How should a very large composition be stored and loaded?
 - How should an edit be validated before it is saved?

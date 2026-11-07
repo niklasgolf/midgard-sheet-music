@@ -3,8 +3,8 @@ import midiBUrl from '../../midi-files/chopin-prelude-op-28-no-7-in-a-major-b.mi
 import pdfAUrl from '../../pdf-files/chopin-prelude-op-28-no-7-in-a-major.pdf?url'
 import pdfBUrl from '../../pdf-files/chopin-prelude-op-28-no-7-in-a-major-b.pdf?url'
 import { parseMidi, type MidiFile } from '../midi/parse-midi.ts'
+import type { SongRepository } from './song-repository.ts'
 import { SONG_SCHEMA_VERSION, type Song } from './song.ts'
-import { addSong, getSong, listSongs } from './song-database.ts'
 
 /** Existing demonstration Song. This id is already stored and must not be replaced. */
 export const CHOPIN_SONG_ID = 'chopin-prelude-op-28-no-7'
@@ -55,15 +55,15 @@ export type ProjectSongLoad = {
  * Adds a project Song only when its id is absent.
  * An existing record, including its settings and MIDI, is left untouched.
  */
-export async function ensureProjectSongs(): Promise<ProjectSongLoad> {
+export async function ensureProjectSongs(repository: SongRepository): Promise<ProjectSongLoad> {
   const importedIds = new Set<string>()
   for (const entry of PROJECT_SONGS) {
-    const existing = await getSong(entry.id)
+    const existing = await repository.getSong(entry.id)
     if (existing) continue
-    const imported = await importMissingSong(entry)
+    const imported = await importMissingSong(repository, entry)
     if (imported) importedIds.add(entry.id)
   }
-  return { songs: await listSongs(), importedIds }
+  return { songs: await repository.listSongs(), importedIds }
 }
 
 /** PDF for a stored Song. The known project files cover records saved before pdfFilename existed. */
@@ -83,7 +83,7 @@ export function pdfFilenameForSong(song: Song): string | undefined {
     ?.pdfFilename
 }
 
-async function importMissingSong(entry: ProjectSongFile): Promise<boolean> {
+async function importMissingSong(repository: SongRepository, entry: ProjectSongFile): Promise<boolean> {
   const originalMidi = await readMidi(entry.midiUrl)
   const song: Song = {
     id: entry.id,
@@ -99,14 +99,14 @@ async function importMissingSong(entry: ProjectSongFile): Promise<boolean> {
   }
 
   try {
-    await addSong(song)
+    await repository.addSong(song)
   } catch (error) {
-    const stored = await getSong(entry.id)
+    const stored = await repository.getSong(entry.id)
     if (stored) return false
     throw error
   }
 
-  const stored = await getSong(entry.id)
+  const stored = await repository.getSong(entry.id)
   if (!stored) {
     throw new Error(`The Song ${entry.id} was saved but could not be read back.`)
   }

@@ -35,9 +35,11 @@ export type PickupInterpretation =
   | { present: true; duration: NoteValue }
 
 /**
- * One imported MIDI sound written as several tied notes.
+ * One imported MIDI sound written as several notes.
  * The identity is the original event: track, pitch, onset, and ending.
  * `written` is the spelling of that one sound. It is not a new MIDI event.
+ * `ties` has one flag for each junction between those written notes.
+ * Omitted flags mean every junction is tied. `false` is a repeated written note.
  */
 export type SustainedNoteReading = {
   track: number
@@ -45,6 +47,7 @@ export type SustainedNoteReading = {
   startTick: number
   endTick: number
   written: readonly NoteValue[]
+  ties?: readonly boolean[]
 }
 
 /**
@@ -60,7 +63,7 @@ export type MusicalInterpretation = {
   ticksPerWrittenQuarter?: number
   /**
    * Explicit spellings for MIDI sounds that are not one catalog duration.
-   * Absent until an interpretation is stored. A project reading may still apply at draw time.
+   * Absent until an interpretation is stored. Drawing reads this list from the Song.
    */
   sustainedNotes?: readonly SustainedNoteReading[]
 }
@@ -159,8 +162,15 @@ function isSustainedNote(value: unknown): value is SustainedNoteReading {
     reading.endTick > reading.startTick &&
     Array.isArray(reading.written) &&
     reading.written.length >= 2 &&
-    reading.written.every(isNoteValue)
+    reading.written.every(isNoteValue) &&
+    hasTieFlags(reading.ties, reading.written.length)
   )
+}
+
+/** Absent flags mean every junction is tied. A present list has one boolean per junction. */
+function hasTieFlags(ties: unknown, writtenLength: number): boolean {
+  if (ties === undefined) return true
+  return Array.isArray(ties) && ties.length === writtenLength - 1 && ties.every((flag) => typeof flag === 'boolean')
 }
 
 function isTicksPerWrittenQuarter(value: unknown): value is number {

@@ -14,17 +14,23 @@ import {
   tieEndpoints,
   tieExtentY,
   tiePath,
+  tieSideForChord,
   tieSideForStep,
+  tiedGroupSteps,
 } from '../src/engraving/tie.ts'
 import { fractionFromQuarters } from '../src/interpretation/duration.ts'
 import { buildMeasureContent, pitchCount, type MeasureContent } from '../src/interpretation/measure-content.ts'
-import { sustainedReadingsFor } from '../src/interpretation/project-readings.ts'
 import { assignPianoStaffs } from '../src/interpretation/staff.ts'
 import { planTies, spellSustainedNote, type WrittenSegment } from '../src/interpretation/sustained-note.ts'
 import { parseMidi, type MidiNote } from '../src/midi/parse-midi.ts'
 import { openingMeasures, writtenMeasures, type WrittenMeasure } from '../src/notation/written-measures.ts'
-
-const SONG_B_ID = 'chopin-prelude-op28-no7-b'
+import {
+  SONG_B_BAR11_CSHARP,
+  SONG_B_BAR11_E,
+  SONG_B_BAR5_D4,
+  SONG_B_ID,
+  SONG_B_READINGS,
+} from '../src/song/install-sustained-reading.ts'
 const QUARTER = 384
 
 function fail(message: string): never {
@@ -55,10 +61,8 @@ if (midi.notes.some((note) => note.midi === 62 && (note.startTick === 5376 || no
   fail('The MIDI file already contains a D4 at a written split point.')
 }
 
-const readings = sustainedReadingsFor({ id: SONG_B_ID, musicalInterpretation: {} })
-if (readings.length !== 1) fail('Song B should have one project reading.')
-const reading = readings[0]
-if (reading === undefined) fail('The project reading is missing.')
+const readings = SONG_B_READINGS
+const reading = SONG_B_BAR5_D4
 const segments = spellSustainedNote(sounded, reading, QUARTER)
 if (segments === undefined) fail('The D4 reading did not spell.')
 if (segments.map((segment) => segment.duration.base).join(',') !== 'sixteenth,half,half') {
@@ -75,23 +79,13 @@ if (segments.some((segment) => segment.soundingStartTick !== 5280 || segment.sou
   fail('A written note lost the original sounding interval.')
 }
 
+if (segments.some((segment, index) => segment.tiedToNext !== (index < segments.length - 1))) {
+  fail('The D4 reading should tie every junction when no tie flags are stored.')
+}
 const mismatched = spellSustainedNote(sounded, { ...reading, written: ['half', 'half'] }, QUARTER)
 if (mismatched !== undefined) fail('A spelling that does not add up to the MIDI duration was accepted.')
 const otherPitch = spellSustainedNote(sounded, { ...reading, midi: 60 }, QUARTER)
 if (otherPitch !== undefined) fail('A reading for a different pitch was applied to the D4.')
-
-const stored = sustainedReadingsFor({
-  id: SONG_B_ID,
-  musicalInterpretation: {
-    sustainedNotes: [{ ...reading, written: ['quarter', 'quarter', 'quarter', 'quarter', 'eighth'] }],
-  },
-})
-if (stored.length !== 1 || stored[0]?.written.length !== 5) {
-  fail('A stored spelling should replace the project spelling for the same MIDI event.')
-}
-if (sustainedReadingsFor({ id: 'chopin-prelude-op-28-no-7', musicalInterpretation: {} }).length !== 0) {
-  fail('Song A should not receive the Song B reading.')
-}
 
 const staves = assignPianoStaffs(midi.notes)
 if (!staves.ready) fail(staves.message)
@@ -184,20 +178,55 @@ if (new Set(tieIds).size !== 2 || tieIds.some((id) => !id.startsWith('tie:2:62:5
   fail(`Tie ids are ${tieIds.join(', ')}.`)
 }
 
-for (const index of [11, 15]) {
-  const measure = plan.measures[index]
-  if (measure === undefined) fail(`Bar ${index} is missing.`)
-  const plain = contentFor(measure, false)
-  const tied = contentFor(measure, true)
-  sameList(unresolvedKeys(plain), unresolvedKeys(tied), `Bar ${index} unresolved notes`)
-  if (pitchCount(plain) !== pitchCount(tied)) fail(`Bar ${index} pitch count changed.`)
-  if (tied.ties.length !== 0) fail(`Bar ${index} gained a tie.`)
-}
-
-const bar11Keys = unresolvedKeys(contentFor(bar11, true))
-sameList(bar11Keys.filter((key) => key.endsWith(':864')), ['2:73:12192:864', '2:76:12192:864'], 'Bar 11 crossing notes')
-const bar15Keys = unresolvedKeys(contentFor(bar15, true))
+const bar15Plain = contentFor(bar15, false)
+const bar15Tied = contentFor(bar15, true)
+sameList(unresolvedKeys(bar15Plain), unresolvedKeys(bar15Tied), 'Bar 15 unresolved notes')
+if (pitchCount(bar15Plain) !== pitchCount(bar15Tied)) fail('Bar 15 pitch count changed.')
+if (bar15Tied.ties.length !== 0) fail('Bar 15 gained a tie.')
+const bar15Keys = unresolvedKeys(bar15Tied)
 sameList(bar15Keys.filter((key) => key.startsWith('2:69:')), ['2:69:16800:52', '2:69:16852:44'], 'Bar 15 short A4s')
+
+const bar11Plain = contentFor(bar11, false)
+const bar11Tied = contentFor(bar11, true)
+sameList(
+  unresolvedKeys(bar11Plain).filter((key) => key.endsWith(':864')),
+  ['2:73:12192:864', '2:76:12192:864'],
+  'Bar 11 before the reading',
+)
+if (unresolvedKeys(bar11Tied).some((key) => key.endsWith(':864'))) fail('Bar 11 still has an unresolved 864-tick note.')
+if (bar11Tied.ties.length !== 2) fail(`Bar 11 should have two ties, found ${bar11Tied.ties.length}.`)
+if (bar11Tied.ties.some((tie) => tie.role !== 'complete')) fail('A Bar 11 tie leaves the measure.')
+sameList(
+  bar11Tied.ties.map((tie) => tie.id),
+  ['tie:2:73:12192:0', 'tie:2:76:12192:0'],
+  'Bar 11 tie ids',
+)
+if (bar11Tied.ties.some((tie) => tie.fromStartTick !== 12192 || tie.toStartTick !== 12288)) {
+  fail('A Bar 11 tie does not join the sixteenth to the first quarter.')
+}
+checkBar11Pitch(bar11Tied, 73)
+checkBar11Pitch(bar11Tied, 76)
+const quarterChord = trebleAt(bar11Tied, 12288)
+const repeatedChord = trebleAt(bar11Tied, 12672)
+for (const midiPitch of [73, 76, 81, 85]) {
+  if (!quarterChord.includes(`${midiPitch}:384:quarter`)) fail(`Beat 2 of Bar 11 lost MIDI ${midiPitch}.`)
+  if (!repeatedChord.includes(`${midiPitch}:384:quarter`)) fail(`Beat 3 of Bar 11 lost MIDI ${midiPitch}.`)
+}
+for (const startTick of [12288, 12672]) {
+  const chords = bar11Tied.columns.flatMap((column) =>
+    column.events.filter(
+      (event) => event.staff === 'treble' && event.pitches.some((pitch) => pitch.startTick === startTick),
+    ),
+  )
+  if (chords.length !== 1 || chords[0]?.pitches.length !== 4) {
+    fail(`The Bar 11 quarter at ${startTick} is not one four-note chord.`)
+  }
+}
+const bar12 = plan.measures[12]
+if (bar12 === undefined) fail('Bar 12 is missing.')
+if (contentFor(bar12, true).ties.some((tie) => tie.soundingStartTick === 12192)) {
+  fail('Bar 11’s ties continued into Bar 12.')
+}
 
 let recognizedWhole = false
 for (const measure of plan.measures) {
@@ -212,7 +241,46 @@ for (const measure of plan.measures) {
 }
 if (!recognizedWhole) fail('The A4 at tick 16896 should stay a written whole note.')
 
-if (JSON.stringify(midi.notes) !== before) fail('Interpreting the D4 changed the MIDI notes.')
+const sharp = midi.notes.filter((note) => note.track === 2 && note.midi === 73 && note.startTick === 12192)
+const upper = midi.notes.filter((note) => note.track === 2 && note.midi === 76 && note.startTick === 12192)
+if (sharp.length !== 1 || upper.length !== 1) fail('Bar 11 no longer has one MIDI event for each tied pitch.')
+for (const note of [sharp[0], upper[0]]) {
+  if (note === undefined || note.endTick !== 13056 || note.durationTicks !== 864) {
+    fail(`A Bar 11 MIDI event changed: ${JSON.stringify(note)}.`)
+  }
+}
+const sharpSegments = spellSustainedNote(sharp[0] as MidiNote, SONG_B_BAR11_CSHARP, QUARTER)
+const upperSegments = spellSustainedNote(upper[0] as MidiNote, SONG_B_BAR11_E, QUARTER)
+for (const spelled of [sharpSegments, upperSegments]) {
+  if (spelled === undefined) fail('A Bar 11 reading did not spell.')
+  if (spelled.map((segment) => segment.durationTicks).join(',') !== '96,384,384') {
+    fail(`Bar 11 written ticks are ${spelled.map((segment) => segment.durationTicks).join(',')}.`)
+  }
+  if (spelled.reduce((sum, segment) => sum + segment.durationTicks, 0) !== 864) fail('A Bar 11 spelling does not total 864 ticks.')
+  if (spelled.map((segment) => segment.tiedToNext).join(',') !== 'true,false,false') {
+    fail('The Bar 11 tie flags were not applied to the written notes.')
+  }
+}
+if (planTies(sharpSegments ?? [], bar11.span).length !== 1) fail('C♯5 should have one tie inside Bar 11.')
+const untiedFlags = spellSustainedNote(sharp[0] as MidiNote, { ...SONG_B_BAR11_CSHARP, ties: undefined }, QUARTER)
+if (untiedFlags === undefined || planTies(untiedFlags, bar11.span).length !== 2) {
+  fail('A reading without tie flags should still tie every junction.')
+}
+const badFlags = spellSustainedNote(sharp[0] as MidiNote, { ...SONG_B_BAR11_CSHARP, ties: [true] }, QUARTER)
+if (badFlags !== undefined) fail('A tie list of the wrong length was accepted.')
+const group = tiedGroupSteps(0, [
+  { staff: 'treble', staffStep: 5, fromStartTick: 12192, toStartTick: 12288 },
+  { staff: 'treble', staffStep: 7, fromStartTick: 12192, toStartTick: 12288 },
+])
+if (tieSideForChord(5, group) !== 1 || tieSideForChord(7, group) !== -1) {
+  fail('The two notes of a tied chord should bow away from each other.')
+}
+if (tieSideForChord(-1, [-1, -1]) !== 1) fail('The D4 split tie should still bow downward.')
+if (tieSideForChord(4, tiedGroupSteps(0, [{ staff: 'treble', staffStep: 4 }])) !== tieSideForStep(4)) {
+  fail('A tie with no chord partner changed the middle-line direction.')
+}
+
+if (JSON.stringify(midi.notes) !== before) fail('Interpreting the readings changed the MIDI notes.')
 if (midi.notes.length !== 168) fail('A MIDI note was added or removed.')
 
 const chain = segmentsAt([0, 500, 1000], 500)
@@ -297,7 +365,33 @@ function segmentsAt(starts: readonly number[], duration: number): WrittenSegment
     endTick: startTick + duration,
     durationTicks: duration,
     duration: { base: 'quarter', dots: 0, quarters: { numerator: 1, denominator: 1 } },
+    tiedToNext: index < starts.length - 1,
   }))
+}
+
+function trebleAt(content: MeasureContent, startTick: number): string[] {
+  return content.columns.flatMap((column) =>
+    column.events
+      .filter((event) => event.staff === 'treble')
+      .flatMap((event) =>
+        event.pitches
+          .filter((pitch) => pitch.startTick === startTick)
+          .map((pitch) => `${pitch.midi}:${pitch.durationTicks}:${event.duration.base}`),
+      ),
+  )
+}
+
+function checkBar11Pitch(content: MeasureContent, midiPitch: number): void {
+  const written = content.columns.flatMap((column) =>
+    column.events.flatMap((event) =>
+      event.pitches
+        .filter((pitch) => pitch.midi === midiPitch && pitch.sounding?.startTick === 12192)
+        .map((pitch) => `${pitch.startTick}:${pitch.durationTicks}:${event.duration.base}`),
+    ),
+  )
+  if (written.join(',') !== '12192:96:sixteenth,12288:384:quarter,12672:384:quarter') {
+    fail(`Bar 11 MIDI ${midiPitch} is written as ${written.join(',')}.`)
+  }
 }
 
 function checkSongA(): void {

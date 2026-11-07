@@ -21,7 +21,8 @@ import {
   tieEndpoints,
   tieExtentY,
   tiePath,
-  tieSideForStep,
+  tieSideForChord,
+  tiedGroupSteps,
 } from '../engraving/tie.ts'
 import type {
   MeasureContent,
@@ -390,11 +391,24 @@ function drawTies(
   staffRight: number,
 ): void {
   const anchors = tieAnchors(frame, placed, spacing)
-  for (const tie of ties) {
+  const prepared = ties.map((tie) => {
     const from = anchorFor(anchors, tie, tie.fromStartTick)
     const to = anchorFor(anchors, tie, tie.toStartTick)
-    const step = from?.staffStep ?? to?.staffStep ?? pitchStaffStep(tie.midi, tie.staff === 'bass' ? BASS_BOTTOM_DIATONIC : TREBLE_BOTTOM_DIATONIC)
-    const side = tieSideForStep(step)
+    const step =
+      from?.staffStep ??
+      to?.staffStep ??
+      pitchStaffStep(tie.midi, tie.staff === 'bass' ? BASS_BOTTOM_DIATONIC : TREBLE_BOTTOM_DIATONIC)
+    return { tie, from, to, step }
+  })
+  const onsets = prepared.map((item) => ({
+    staff: item.tie.staff,
+    staffStep: item.step,
+    fromStartTick: item.tie.fromStartTick,
+    toStartTick: item.tie.toStartTick,
+  }))
+  for (const [index, item] of prepared.entries()) {
+    const { tie, from, to, step } = item
+    const side = tieSideForChord(step, tiedGroupSteps(index, onsets))
     const bottomY = tie.staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
     const openY = tieAttachmentY(noteheadY(bottomY, step), side, NOTE_RY)
     const startY = from === undefined ? openY : tieAttachmentY(from.y, side, NOTE_RY)

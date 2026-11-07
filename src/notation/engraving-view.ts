@@ -1,6 +1,5 @@
 import { fractionFromQuarters } from '../interpretation/duration.ts'
 import { buildMeasureContent } from '../interpretation/measure-content.ts'
-import { sustainedReadingsFor } from '../interpretation/project-readings.ts'
 import { assignPianoStaffs, type PianoStaff } from '../interpretation/staff.ts'
 import type { Song } from '../song/song.ts'
 import { writtenMeasures } from './written-measures.ts'
@@ -80,7 +79,7 @@ function measureBlock(
     ticksPerWrittenQuarter,
     staffByTrack,
     measureQuarters: fractionFromQuarters(spanQuarters),
-    sustainedNotes: sustainedReadingsFor(song),
+    sustainedNotes: song.musicalInterpretation.sustainedNotes,
   })
   const frame = document.createElement('div')
   frame.className = 'measure'

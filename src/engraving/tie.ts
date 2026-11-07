@@ -42,10 +42,57 @@ export type TieCurve = {
 /**
  * Below the middle line the stem goes up, so the tie bows down.
  * On or above the middle line the stem goes down, so the tie bows up.
- * The side follows this pitch, so both measures of a split tie agree.
+ * A note that is tied by itself uses this side, so both measures of a split tie agree.
  */
 export function tieSideForStep(staffStep: number): StemDirection {
   return staffStep < MIDDLE_STAFF_STEP ? 1 : -1
+}
+
+export type TiedOnset = {
+  staff: string
+  staffStep: number
+  fromStartTick?: number
+  toStartTick?: number
+}
+
+/**
+ * Staff steps of the tied notes that share this tie's onset and staff.
+ * A continuation, which has neither written onset in this measure, stands alone.
+ */
+export function tiedGroupSteps(index: number, onsets: readonly TiedOnset[]): number[] {
+  const tie = onsets[index]
+  if (tie === undefined) return []
+  const ticks = [tie.fromStartTick, tie.toStartTick].filter((tick): tick is number => tick !== undefined)
+  if (ticks.length === 0) return [tie.staffStep]
+  return onsets
+    .filter(
+      (other) =>
+        other.staff === tie.staff &&
+        ticks.some((tick) => tick === other.fromStartTick || tick === other.toStartTick),
+    )
+    .map((other) => other.staffStep)
+}
+
+/**
+ * Direction for one tie among the notes tied at the same onset.
+ * One tied note keeps the middle-line side. Two or more put the lowest curve
+ * below the chord and the highest curve above it, so the bows do not stack
+ * on one side of the noteheads.
+ */
+export function tieSideForChord(staffStep: number, groupSteps: readonly number[]): StemDirection {
+  const ordered = [...groupSteps].sort((left, right) => left - right)
+  const lowest = ordered[0]
+  const highest = ordered[ordered.length - 1]
+  if (ordered.length < 2 || lowest === undefined || highest === undefined || lowest === highest) {
+    return tieSideForStep(staffStep)
+  }
+  if (staffStep <= lowest) return 1
+  if (staffStep >= highest) return -1
+  const distanceBelow = staffStep - lowest
+  const distanceAbove = highest - staffStep
+  if (distanceBelow < distanceAbove) return -1
+  if (distanceAbove < distanceBelow) return 1
+  return tieSideForStep(staffStep)
 }
 
 /** The point where a tie meets a notehead, on the bow side. */

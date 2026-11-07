@@ -1,5 +1,5 @@
 import { KEY_SIGNATURES, keyOptionLabel, keyOptionValue } from './musical-keys.ts'
-import { getSong, replaceSong } from './song-database.ts'
+import type { SongRepository } from './song-repository.ts'
 import { applySongSettings, parseSongSettings, type SettingsFormValues } from './song-settings.ts'
 import type { Song } from './song.ts'
 
@@ -10,6 +10,7 @@ export type SongSettingsController = {
 export function mountSongSettings(
   form: HTMLFormElement,
   status: HTMLElement,
+  repository: SongRepository,
   onSaved: (song: Song) => void,
 ): SongSettingsController {
   const title = requiredField<HTMLInputElement>(form, 'title')
@@ -35,7 +36,7 @@ export function mountSongSettings(
 
   form.addEventListener('submit', (event) => {
     event.preventDefault()
-    void save(form, status, submit, () => current, onSaved, (song) => {
+    void save(form, status, submit, repository, () => current, onSaved, (song) => {
       current = song
     })
   })
@@ -65,6 +66,7 @@ async function save(
   form: HTMLFormElement,
   status: HTMLElement,
   submit: HTMLButtonElement,
+  repository: SongRepository,
   readCurrent: () => Song | undefined,
   onSaved: (song: Song) => void,
   remember: (song: Song) => void,
@@ -85,8 +87,8 @@ async function save(
   const updated = applySongSettings(song, parsed.settings)
   submit.disabled = true
   try {
-    await replaceSong(updated)
-    const stored = await getSong(song.id)
+    await repository.saveSong(updated)
+    const stored = await repository.getSong(song.id)
     if (!stored) {
       throw new Error('The Song was saved but could not be read back.')
     }
