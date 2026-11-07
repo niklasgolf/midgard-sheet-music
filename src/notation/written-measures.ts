@@ -11,6 +11,17 @@ export type OpeningMeasures =
   | { ready: true; pickup: TickSpan; firstFull: TickSpan }
   | { ready: false; message: string }
 
+export type WrittenMeasure = {
+  /** Bar 0 is the pickup. Bar 1 is the first complete measure. */
+  index: number
+  span: TickSpan
+  quarters: number
+}
+
+export type WrittenMeasurePlan =
+  | { ready: true; measures: WrittenMeasure[] }
+  | { ready: false; message: string }
+
 const QUARTERS_IN_NOTE: Record<NoteValue, number> = {
   sixteenth: 1 / 4,
   eighth: 1 / 2,
@@ -32,10 +43,15 @@ export function notesBeginningInSpan(notes: readonly MidiNote[], span: TickSpan)
 }
 
 /**
- * Bar 0 is the pickup. Bar 1 is the first full measure after it.
- * Both edges are exact products of the saved settings, not stored boundaries.
+ * Bar 0 is the pickup. Each later bar is one complete measure.
+ * The edges are products of the saved settings, not stored boundaries.
+ * `measureCount` includes the pickup.
  */
-export function openingMeasures(interpretation: MusicalInterpretation): OpeningMeasures {
+export function writtenMeasures(interpretation: MusicalInterpretation, measureCount: number): WrittenMeasurePlan {
+  if (!Number.isInteger(measureCount) || measureCount < 1) {
+    return { ready: false, message: 'The measure count must be a positive whole number.' }
+  }
+
   const quarter = interpretation.ticksPerWrittenQuarter
   const signature = interpretation.timeSignature
   const pickup = interpretation.pickup
@@ -54,20 +70,45 @@ export function openingMeasures(interpretation: MusicalInterpretation): OpeningM
     return {
       ready: false,
       message:
-        'Song Settings says this piece has no pickup. These first two pictures are a pickup measure and the first full measure.',
+        'Song Settings says this piece has no pickup. This picture begins with a pickup measure and then draws complete measures.',
     }
   }
   if (signature === undefined || pickup?.present !== true || quarter === undefined) {
     return { ready: false, message: 'The musical settings needed to draw the measures are incomplete.' }
   }
 
-  const pickupEnd = QUARTERS_IN_NOTE[pickup.duration] * quarter
-  const fullMeasure = quartersInBar(signature) * quarter
-  return {
-    ready: true,
-    pickup: { startTick: 0, endTick: pickupEnd },
-    firstFull: { startTick: pickupEnd, endTick: pickupEnd + fullMeasure },
+  const pickupQuarters = QUARTERS_IN_NOTE[pickup.duration]
+  const barQuarters = quartersInBar(signature)
+  const pickupEnd = pickupQuarters * quarter
+  const fullMeasure = barQuarters * quarter
+  const measures: WrittenMeasure[] = []
+  for (let index = 0; index < measureCount; index += 1) {
+    if (index === 0) {
+      measures.push({ index, span: { startTick: 0, endTick: pickupEnd }, quarters: pickupQuarters })
+      continue
+    }
+    const startTick = pickupEnd + (index - 1) * fullMeasure
+    measures.push({
+      index,
+      span: { startTick, endTick: startTick + fullMeasure },
+      quarters: barQuarters,
+    })
   }
+  return { ready: true, measures }
+}
+
+/**
+ * Bar 0 is the pickup. Bar 1 is the first full measure after it.
+ */
+export function openingMeasures(interpretation: MusicalInterpretation): OpeningMeasures {
+  const plan = writtenMeasures(interpretation, 2)
+  if (!plan.ready) return plan
+  const pickup = plan.measures[0]
+  const firstFull = plan.measures[1]
+  if (pickup === undefined || firstFull === undefined) {
+    return { ready: false, message: 'The musical settings needed to draw the measures are incomplete.' }
+  }
+  return { ready: true, pickup: pickup.span, firstFull: firstFull.span }
 }
 
 export function quartersInBar(signature: TimeSignature): number {

@@ -31,7 +31,7 @@ const NOTEHEAD_WIDTH = NOTE_RX * 2
 
 export function measureSvg(options: {
   label: string
-  content: Extract<MeasureContent, { ready: true }>
+  content: MeasureContent
 }): SVGSVGElement {
   const placed = options.content.columns.map((column) => placeColumn(column))
   const extents = new Map(placed.map((column) => [fractionKey(column.onset), column.extent]))
@@ -53,7 +53,9 @@ export function measureSvg(options: {
   svg.setAttribute('width', String(width))
   svg.setAttribute('height', String(frame.height))
   svg.setAttribute('role', 'img')
-  svg.setAttribute('aria-label', `${options.label}, ${notes} notes`)
+  const unresolved = options.content.unresolved.length
+  const incomplete = unresolved === 0 ? '' : `, ${unresolved} unresolved`
+  svg.setAttribute('aria-label', `${options.label}, ${notes} notes${incomplete}`)
 
   drawStaff(svg, staffLeft, staffRight, frame.trebleBottomY)
   drawStaff(svg, staffLeft, staffRight, frame.bassBottomY)
@@ -66,7 +68,29 @@ export function measureSvg(options: {
     }
   }
 
+  fitVerticalFrame(svg, width, frame.height)
   return svg
+}
+
+/** Staff positions stay put. The frame grows only when a stem or notehead passes the padding. */
+function fitVerticalFrame(svg: SVGSVGElement, width: number, minimumHeight: number): void {
+  const ink = 8
+  let minY = 0
+  let maxY = minimumHeight
+  for (const element of svg.querySelectorAll('line, ellipse, circle')) {
+    for (const name of ['y1', 'y2', 'cy']) {
+      const value = element.getAttribute(name)
+      if (value === null) continue
+      const y = Number(value)
+      minY = Math.min(minY, y)
+      maxY = Math.max(maxY, y)
+    }
+  }
+  const top = minY < 0 ? minY - ink : 0
+  const bottom = maxY > minimumHeight ? maxY + ink : minimumHeight
+  const height = bottom - top
+  svg.setAttribute('viewBox', `0 ${top} ${width} ${height}`)
+  svg.setAttribute('height', String(height))
 }
 
 type PlacedHead = {

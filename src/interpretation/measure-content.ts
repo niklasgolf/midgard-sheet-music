@@ -32,9 +32,21 @@ export type RhythmicColumn = {
   events: StaffEvent[]
 }
 
-export type MeasureContent =
-  | { ready: true; measureQuarters: Fraction; columns: RhythmicColumn[] }
-  | { ready: false; message: string }
+/** A MIDI note this measure could not turn into written notation. The MIDI values are unchanged. */
+export type UnresolvedNote = {
+  midi: number
+  track: number
+  startTick: number
+  durationTicks: number
+  reason: string
+}
+
+export type MeasureContent = {
+  ready: true
+  measureQuarters: Fraction
+  columns: RhythmicColumn[]
+  unresolved: UnresolvedNote[]
+}
 
 /**
  * Musical contents of one measure. Positions in pixels are not decided here.
@@ -46,26 +58,25 @@ export function buildMeasureContent(options: {
   staffByTrack: ReadonlyMap<number, PianoStaff>
   measureQuarters: Fraction
 }): MeasureContent {
-  const problems: string[] = []
+  const unresolved: UnresolvedNote[] = []
   const groups = new Map<string, StaffEvent>()
 
   for (const note of options.notes) {
-    const where = `Track ${note.track}, MIDI note ${note.midi}, tick ${note.startTick}`
     const staff = options.staffByTrack.get(note.track)
     if (staff === undefined) {
-      problems.push(`${where} has no piano staff assignment.`)
+      unresolved.push(unresolvedNote(note, `Track ${note.track} has no piano staff assignment.`))
       continue
     }
 
     const duration = interpretDuration(note.durationTicks, options.ticksPerWrittenQuarter)
     if (!duration.recognized) {
-      problems.push(`${where}: ${duration.message}`)
+      unresolved.push(unresolvedNote(note, duration.message))
       continue
     }
 
     const onset = interpretOnset(note.startTick - options.span.startTick, options.ticksPerWrittenQuarter)
     if (!onset.recognized) {
-      problems.push(`${where}: ${onset.message}`)
+      unresolved.push(unresolvedNote(note, onset.message))
       continue
     }
 
@@ -82,10 +93,6 @@ export function buildMeasureContent(options: {
     } else {
       event.pitches.push(pitch)
     }
-  }
-
-  if (problems.length > 0) {
-    return { ready: false, message: problems.join(' ') }
   }
 
   const columns = new Map<string, RhythmicColumn>()
@@ -105,18 +112,33 @@ export function buildMeasureContent(options: {
     column.events.sort(compareEvents)
   }
 
+  unresolved.sort(
+    (left, right) => left.startTick - right.startTick || left.track - right.track || left.midi - right.midi,
+  )
+
   return {
     ready: true,
     measureQuarters: options.measureQuarters,
     columns: ordered,
+    unresolved,
   }
 }
 
-export function pitchCount(content: Extract<MeasureContent, { ready: true }>): number {
+export function pitchCount(content: MeasureContent): number {
   return content.columns.reduce(
     (sum, column) => sum + column.events.reduce((inner, event) => inner + event.pitches.length, 0),
     0,
   )
+}
+
+function unresolvedNote(note: MidiNote, reason: string): UnresolvedNote {
+  return {
+    midi: note.midi,
+    track: note.track,
+    startTick: note.startTick,
+    durationTicks: note.durationTicks,
+    reason,
+  }
 }
 
 function pitchFromNote(note: MidiNote): MeasurePitch {

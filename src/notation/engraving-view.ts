@@ -2,10 +2,13 @@ import { fractionFromQuarters } from '../interpretation/duration.ts'
 import { buildMeasureContent } from '../interpretation/measure-content.ts'
 import { assignPianoStaffs, type PianoStaff } from '../interpretation/staff.ts'
 import type { Song } from '../song/song.ts'
-import { quartersInBar, quartersInNote, openingMeasures, notesBeginningInSpan } from './written-measures.ts'
+import { notesBeginningInSpan, writtenMeasures } from './written-measures.ts'
 import { measureSvg } from './piano-measure-svg.ts'
 
-/** Draws Bar 0 and Bar 1 from the stored Song. The SVG is not saved. */
+/** Pickup plus sixteen complete measures. The page layout chooses this count. */
+const EXPERIMENT_MEASURE_COUNT = 17
+
+/** Draws the development measures from the stored Song. The SVGs are not saved. */
 export function renderEngraving(container: HTMLElement, song: Song): void {
   const title = document.createElement('h2')
   title.id = 'engraving-title'
@@ -13,21 +16,14 @@ export function renderEngraving(container: HTMLElement, song: Song): void {
   title.textContent = 'Traditional Sheet Music — SVG Experiment'
 
   const interpretation = song.musicalInterpretation
-  const measures = openingMeasures(interpretation)
-  const signature = interpretation.timeSignature
-  const pickup = interpretation.pickup
+  const plan = writtenMeasures(interpretation, EXPERIMENT_MEASURE_COUNT)
   const ticksPerWrittenQuarter = interpretation.ticksPerWrittenQuarter
-  if (
-    !measures.ready ||
-    signature === undefined ||
-    pickup?.present !== true ||
-    ticksPerWrittenQuarter === undefined
-  ) {
+  if (!plan.ready || ticksPerWrittenQuarter === undefined) {
     const message = document.createElement('p')
     message.className = 'engraving__message'
-    message.textContent = measures.ready
+    message.textContent = plan.ready
       ? 'The musical settings needed to draw the measures are incomplete.'
-      : measures.message
+      : plan.message
     container.replaceChildren(title, message)
     return
   }
@@ -41,28 +37,26 @@ export function renderEngraving(container: HTMLElement, song: Song): void {
     return
   }
 
-  const barQuarters = quartersInBar(signature)
-  const row = document.createElement('div')
-  row.className = 'engraving__row'
-  row.append(
-    measureBlock(
-      song,
-      'Bar 0',
-      measures.pickup,
-      quartersInNote(pickup.duration),
-      ticksPerWrittenQuarter,
-      staves.staffByTrack,
-    ),
-    measureBlock(
-      song,
-      'Bar 1',
-      measures.firstFull,
-      barQuarters,
-      ticksPerWrittenQuarter,
-      staves.staffByTrack,
-    ),
+  const grid = document.createElement('div')
+  grid.className = 'engraving__grid'
+  for (const measure of plan.measures) {
+    grid.append(
+      measureBlock(
+        song,
+        `Bar ${measure.index}`,
+        measure.span,
+        measure.quarters,
+        ticksPerWrittenQuarter,
+        staves.staffByTrack,
+      ),
+    )
+  }
+  container.replaceChildren(title, grid)
+  const widest = Math.max(
+    0,
+    ...[...grid.querySelectorAll<HTMLElement>('.engraving__item')].map((item) => item.offsetWidth),
   )
-  container.replaceChildren(title, row)
+  if (widest > 0) grid.style.gridTemplateColumns = `repeat(3, ${widest}px)`
 }
 
 function measureBlock(
@@ -92,17 +86,35 @@ function measureBlock(
     staffByTrack,
     measureQuarters: fractionFromQuarters(spanQuarters),
   })
-  if (!content.ready) {
-    const message = document.createElement('p')
-    message.className = 'engraving__message'
-    message.textContent = content.message
-    item.append(name, ticks, message)
-    return item
-  }
-
   const frame = document.createElement('div')
   frame.className = 'measure'
   frame.append(measureSvg({ label, content }))
   item.append(name, ticks, frame)
+  if (content.unresolved.length > 0) item.append(unresolvedWarning(content.unresolved))
   return item
+}
+
+function unresolvedWarning(notes: readonly { midi: number; track: number; startTick: number; durationTicks: number; reason: string }[]): HTMLElement {
+  const count = notes.length
+  const wrap = document.createElement('div')
+  wrap.className = 'engraving__caution'
+
+  const warning = document.createElement('p')
+  warning.className = 'engraving__warning'
+  warning.textContent = `⚠️ ${count} unresolved MIDI ${count === 1 ? 'note' : 'notes'}`
+
+  const details = document.createElement('details')
+  details.className = 'engraving__details'
+  const summary = document.createElement('summary')
+  summary.textContent = 'Show the unresolved notes'
+  const list = document.createElement('ul')
+  list.className = 'engraving__unresolved'
+  for (const note of notes) {
+    const item = document.createElement('li')
+    item.textContent = `Track ${note.track}, MIDI pitch ${note.midi}, onset tick ${note.startTick}, duration ${note.durationTicks} ticks. ${note.reason}`
+    list.append(item)
+  }
+  details.append(summary, list)
+  wrap.append(warning, details)
+  return wrap
 }
