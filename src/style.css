@@ -276,9 +276,10 @@ body {
 }
 
 .engraving .measure {
+  box-sizing: border-box;
   margin: 0;
   padding: 8px 4px 0;
-  border-top: 0;
+  border: 2px solid #00ff00;
   background: transparent;
 }
 
@@ -286,6 +287,7 @@ body {
   display: block;
   max-width: 100%;
   height: auto;
+  background-color: #ffffff;
 }
 
 .measure {
