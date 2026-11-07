@@ -13,10 +13,20 @@ import {
 import { defaultStemDirection, noteheadExtent, placeChordNoteheads, type StemDirection } from '../engraving/chord-offset.ts'
 import { appendDot, appendStem, durationHasStem, extentWithDots, placeAugmentationDots, stemGeometry } from '../engraving/symbols.ts'
 import { fractionKey } from '../interpretation/duration.ts'
-import { columnX, spaceColumns } from '../engraving/spacing.ts'
+import { columnX, spaceColumns, type MeasureSpacing } from '../engraving/spacing.ts'
+import {
+  TIE_APPROACH,
+  tieAttachmentY,
+  tieCurve,
+  tieEndpoints,
+  tieExtentY,
+  tiePath,
+  tieSideForStep,
+} from '../engraving/tie.ts'
 import type {
   MeasureContent,
   MeasurePitch,
+  MeasureTie,
   ProvisionalColumn,
   ProvisionalEvent,
   RhythmicColumn,
@@ -55,10 +65,13 @@ export function measureSvg(options: {
         : { left: Math.max(current.left, column.extent.left), right: Math.max(current.right, column.extent.right) },
     )
   }
+  const opensFromLeft = options.content.ties.some(
+    (tie) => tie.role === 'incoming' || tie.role === 'continuation',
+  )
   const spacing = spaceColumns({
     onsets: [...placed, ...provisional].map((column) => column.onset),
     measureQuarters: options.content.measureQuarters,
-    originX: NOTE_AREA_LEFT,
+    originX: NOTE_AREA_LEFT + (opensFromLeft ? TIE_APPROACH : 0),
     extents,
     noteheadWidth: NOTEHEAD_WIDTH,
   })
@@ -93,6 +106,7 @@ export function measureSvg(options: {
       drawProvisional(svg, frame, group, anchorX)
     }
   }
+  drawTies(svg, frame, options.content.ties, placed, spacing, staffLeft, staffRight)
 
   fitVerticalFrame(svg, width, frame.height)
   return svg
@@ -111,6 +125,12 @@ function fitVerticalFrame(svg: SVGSVGElement, width: number, minimumHeight: numb
       minY = Math.min(minY, y)
       maxY = Math.max(maxY, y)
     }
+  }
+  for (const element of svg.querySelectorAll('[data-extent-min], [data-extent-max]')) {
+    const min = element.getAttribute('data-extent-min')
+    const max = element.getAttribute('data-extent-max')
+    if (min !== null) minY = Math.min(minY, Number(min))
+    if (max !== null) maxY = Math.max(maxY, Number(max))
   }
   const top = minY < 0 ? minY - ink : 0
   const bottom = maxY > minimumHeight ? maxY + ink : minimumHeight
@@ -344,5 +364,103 @@ function drawNotehead(
     head.setAttribute('data-unresolved', 'true')
     head.setAttribute('data-duration-ticks', String(pitch.durationTicks))
   }
+  if (pitch.sounding !== undefined) {
+    head.setAttribute('data-sounding-start', String(pitch.sounding.startTick))
+    head.setAttribute('data-sounding-end', String(pitch.sounding.endTick))
+  }
   svg.append(head)
+}
+
+type TieAnchor = {
+  midi: number
+  startTick: number
+  staff: PianoStaff
+  x: number
+  y: number
+  staffStep: number
+}
+
+function drawTies(
+  svg: SVGSVGElement,
+  frame: { trebleBottomY: number; bassBottomY: number },
+  ties: readonly MeasureTie[],
+  placed: ReturnType<typeof placeColumn>[],
+  spacing: MeasureSpacing,
+  staffLeft: number,
+  staffRight: number,
+): void {
+  const anchors = tieAnchors(frame, placed, spacing)
+  for (const tie of ties) {
+    const from = anchorFor(anchors, tie, tie.fromStartTick)
+    const to = anchorFor(anchors, tie, tie.toStartTick)
+    const step = from?.staffStep ?? to?.staffStep ?? pitchStaffStep(tie.midi, tie.staff === 'bass' ? BASS_BOTTOM_DIATONIC : TREBLE_BOTTOM_DIATONIC)
+    const side = tieSideForStep(step)
+    const bottomY = tie.staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
+    const openY = tieAttachmentY(noteheadY(bottomY, step), side, NOTE_RY)
+    const startY = from === undefined ? openY : tieAttachmentY(from.y, side, NOTE_RY)
+    const endY = to === undefined ? openY : tieAttachmentY(to.y, side, NOTE_RY)
+    if (tie.role === 'complete' && (from === undefined || to === undefined)) continue
+    if (tie.role === 'outgoing' && from === undefined) continue
+    if (tie.role === 'incoming' && to === undefined) continue
+    const ends = tieEndpoints({
+      role: tie.role,
+      staffLeft,
+      staffRight,
+      noteRadiusX: NOTE_RX,
+      fromX: from?.x,
+      toX: to?.x,
+    })
+    if (ends === undefined || ends.endX <= ends.startX) continue
+    const curve = tieCurve({ startX: ends.startX, endX: ends.endX, startY, endY, side })
+    const extent = tieExtentY(curve)
+    const path = document.createElementNS(SVG_NS, 'path')
+    path.setAttribute('d', tiePath(curve))
+    path.setAttribute('fill', INK)
+    path.setAttribute('stroke', 'none')
+    path.setAttribute('data-tie', tie.role)
+    path.setAttribute('data-tie-id', tie.id)
+    path.setAttribute('data-midi', String(tie.midi))
+    path.setAttribute('data-tie-thickness', String(curve.thickness))
+    path.setAttribute('data-tie-bow', String(curve.bow))
+    path.setAttribute('data-tie-side', String(curve.side))
+    path.setAttribute('data-tie-start-x', String(curve.startX))
+    path.setAttribute('data-tie-end-x', String(curve.endX))
+    path.setAttribute('data-tie-start-y', String(curve.startY))
+    path.setAttribute('data-tie-end-y', String(curve.endY))
+    path.setAttribute('data-extent-min', String(extent.min))
+    path.setAttribute('data-extent-max', String(extent.max))
+    svg.append(path)
+  }
+}
+
+function tieAnchors(
+  frame: { trebleBottomY: number; bassBottomY: number },
+  placed: ReturnType<typeof placeColumn>[],
+  spacing: MeasureSpacing,
+): TieAnchor[] {
+  const anchors: TieAnchor[] = []
+  for (const column of placed) {
+    const anchorX = columnX(spacing, column.onset)
+    for (const group of column.events) {
+      const bottomY = group.event.staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
+      for (const head of group.heads) {
+        anchors.push({
+          midi: head.pitch.midi,
+          startTick: head.pitch.startTick,
+          staff: group.event.staff,
+          x: anchorX + head.offsetX,
+          y: noteheadY(bottomY, head.staffStep),
+          staffStep: head.staffStep,
+        })
+      }
+    }
+  }
+  return anchors
+}
+
+function anchorFor(anchors: readonly TieAnchor[], tie: MeasureTie, startTick: number | undefined): TieAnchor | undefined {
+  if (startTick === undefined) return undefined
+  return anchors.find(
+    (anchor) => anchor.midi === tie.midi && anchor.startTick === startTick && anchor.staff === tie.staff,
+  )
 }

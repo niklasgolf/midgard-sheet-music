@@ -1,8 +1,9 @@
 import { fractionFromQuarters } from '../interpretation/duration.ts'
 import { buildMeasureContent } from '../interpretation/measure-content.ts'
+import { sustainedReadingsFor } from '../interpretation/project-readings.ts'
 import { assignPianoStaffs, type PianoStaff } from '../interpretation/staff.ts'
 import type { Song } from '../song/song.ts'
-import { notesBeginningInSpan, writtenMeasures } from './written-measures.ts'
+import { writtenMeasures } from './written-measures.ts'
 import { measureSvg } from './piano-measure-svg.ts'
 
 /** Pickup plus sixteen complete measures. The page layout chooses this count. */
@@ -62,7 +63,6 @@ function measureBlock(
   ticksPerWrittenQuarter: number,
   staffByTrack: ReadonlyMap<number, PianoStaff>,
 ): HTMLElement {
-  const notes = notesBeginningInSpan(song.originalMidi.notes, span)
   const item = document.createElement('div')
   item.className = 'engraving__item'
 
@@ -75,11 +75,12 @@ function measureBlock(
   ticks.textContent = `Ticks ${Math.round(span.startTick)}–${Math.round(span.endTick)}`
 
   const content = buildMeasureContent({
-    notes,
+    notes: song.originalMidi.notes,
     span,
     ticksPerWrittenQuarter,
     staffByTrack,
     measureQuarters: fractionFromQuarters(spanQuarters),
+    sustainedNotes: sustainedReadingsFor(song),
   })
   const frame = document.createElement('div')
   frame.className = 'measure'

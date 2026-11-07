@@ -35,6 +35,19 @@ export type PickupInterpretation =
   | { present: true; duration: NoteValue }
 
 /**
+ * One imported MIDI sound written as several tied notes.
+ * The identity is the original event: track, pitch, onset, and ending.
+ * `written` is the spelling of that one sound. It is not a new MIDI event.
+ */
+export type SustainedNoteReading = {
+  track: number
+  midi: number
+  startTick: number
+  endTick: number
+  written: readonly NoteValue[]
+}
+
+/**
  * Composition-wide musical decisions made after import.
  * Fields are omitted until Song Settings saves them.
  * Other properties may be added by later milestones and must be left in place.
@@ -45,6 +58,11 @@ export type MusicalInterpretation = {
   pickup?: PickupInterpretation
   /** MIDI ticks that last as long as one written quarter note. Not the file PPQ. */
   ticksPerWrittenQuarter?: number
+  /**
+   * Explicit spellings for MIDI sounds that are not one catalog duration.
+   * Absent until an interpretation is stored. A project reading may still apply at draw time.
+   */
+  sustainedNotes?: readonly SustainedNoteReading[]
 }
 
 export type Song = {
@@ -113,7 +131,36 @@ function isInterpretation(value: unknown): value is MusicalInterpretation {
   ) {
     return false
   }
+  if (interpretation.sustainedNotes !== undefined && !isSustainedNotes(interpretation.sustainedNotes)) {
+    return false
+  }
   return true
+}
+
+function isSustainedNotes(value: unknown): value is readonly SustainedNoteReading[] {
+  return Array.isArray(value) && value.every(isSustainedNote)
+}
+
+function isSustainedNote(value: unknown): value is SustainedNoteReading {
+  if (value === null || typeof value !== 'object') return false
+  const reading = value as Partial<SustainedNoteReading>
+  return (
+    Number.isInteger(reading.track) &&
+    reading.track !== undefined &&
+    reading.track >= 1 &&
+    Number.isInteger(reading.midi) &&
+    reading.midi !== undefined &&
+    reading.midi >= 0 &&
+    reading.midi <= 127 &&
+    typeof reading.startTick === 'number' &&
+    Number.isFinite(reading.startTick) &&
+    typeof reading.endTick === 'number' &&
+    Number.isFinite(reading.endTick) &&
+    reading.endTick > reading.startTick &&
+    Array.isArray(reading.written) &&
+    reading.written.length >= 2 &&
+    reading.written.every(isNoteValue)
+  )
 }
 
 function isTicksPerWrittenQuarter(value: unknown): value is number {

@@ -4,6 +4,8 @@
  * It is not the MIDI file's PPQ.
  */
 
+import type { NoteValue } from '../song/song.ts'
+
 /** A note this many MIDI ticks away from a written value is still that value. */
 export const DURATION_TICK_TOLERANCE = 2
 
@@ -89,6 +91,15 @@ export function fractionFromQuarters(quarters: number): Fraction {
 
 export function durationName(duration: WrittenDuration): string {
   return duration.dots === 1 ? `dotted ${duration.base}` : duration.base
+}
+
+/** The undotted catalog value named by a Song note value. Whole notes are not a Song note value. */
+export function undottedDuration(value: NoteValue): WrittenDuration {
+  const match = WRITTEN_VALUES.find((duration) => duration.base === value && duration.dots === 0)
+  if (match === undefined) {
+    throw new Error(`There is no undotted written duration named ${value}.`)
+  }
+  return match
 }
 
 /**
