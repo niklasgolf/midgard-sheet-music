@@ -13,7 +13,7 @@
  */
 
 import type { DurationBase } from '../interpretation/duration.ts'
-import { MIDDLE_STAFF_STEP, STEM_DOWN, STEM_UP, type StemDirection } from './chord-offset.ts'
+import { MIDDLE_STAFF_STEP, noteheadExtent, STEM_DOWN, STEM_UP, type NoteheadExtent, type StemDirection } from './chord-offset.ts'
 import { STAFF_SPACE, STAFF_STEP } from './geometry.ts'
 
 const VEXFLOW_STAFF_SPACE = 10
@@ -105,6 +105,110 @@ export function stemGeometry(options: {
     tipY: lowest.y + reach,
     thickness: STEM_THICKNESS,
   }
+}
+
+/** VexFlow draws a dot with radius 2 at a 10-pixel staff space. */
+export const DOT_RADIUS = (2 / VEXFLOW_STAFF_SPACE) * STAFF_SPACE
+
+/**
+ * Distance from the rightmost notehead edge to the dot's center.
+ * VexFlow's draw places that center 5 pixels beyond the glyph at a 10-pixel staff space.
+ */
+export const DOT_CENTER_GAP = (5 / VEXFLOW_STAFF_SPACE) * STAFF_SPACE
+
+/**
+ * Extra distance between the centers of two dots that share a staff position.
+ * VexFlow advances by the dot's width (5) plus one pixel of spacing.
+ */
+export const DOT_STACK_GAP = (6 / VEXFLOW_STAFF_SPACE) * STAFF_SPACE
+
+export type AugmentationDot = {
+  /** Center, in the same horizontal coordinates as the notehead centers. */
+  x: number
+  /** Staff step of the dot. A line note uses a neighboring space. */
+  staffStep: number
+}
+
+/**
+ * One dot beside each notehead.
+ *
+ * The walk follows VexFlow's Dot.format, from the highest note downward.
+ * A note in a space keeps its dot at that height. A note on a line uses the
+ * space above, unless that space already holds a dot or the note above it,
+ * in which case the dot drops to the space below. Two dots that still share
+ * a height are placed side by side. Every dot clears the rightmost notehead,
+ * including one shifted sideways.
+ */
+export function placeAugmentationDots(
+  heads: readonly { x: number; staffStep: number }[],
+  noteheadRadiusX: number,
+): AugmentationDot[] {
+  const placed: AugmentationDot[] = heads.map((head) => ({ x: 0, staffStep: head.staffStep }))
+  if (heads.length === 0) return placed
+
+  let rightEdge = heads[0]?.x ?? 0
+  for (const head of heads) rightEdge = Math.max(rightEdge, head.x + noteheadRadiusX)
+  const firstX = rightEdge + DOT_CENTER_GAP
+
+  const order = heads.map((head, index) => ({ head, index }))
+  order.sort((left, right) => right.head.staffStep - left.head.staffStep || left.index - right.index)
+
+  let previousHeadStep: number | undefined
+  let previousDotStep: number | undefined
+  const countAtStep = new Map<number, number>()
+
+  for (const entry of order) {
+    const step = entry.head.staffStep
+    let dotStep = step
+    if (previousHeadStep === step && previousDotStep !== undefined) {
+      dotStep = previousDotStep
+    } else if (step % 2 === 0) {
+      const above = step + 1
+      const noteOccupiesSpaceAbove = previousHeadStep !== undefined && previousHeadStep - step === 1
+      dotStep = noteOccupiesSpaceAbove || previousDotStep === above ? step - 1 : above
+    }
+
+    const stacked = countAtStep.get(dotStep) ?? 0
+    countAtStep.set(dotStep, stacked + 1)
+    previousHeadStep = step
+    previousDotStep = dotStep
+    const dot = placed[entry.index]
+    if (dot === undefined) continue
+    dot.x = firstX + stacked * DOT_STACK_GAP
+    dot.staffStep = dotStep
+  }
+  return placed
+}
+
+/** Notehead reach, widened on the right by any augmentation dots. */
+export function extentWithDots(
+  noteOffsets: readonly number[],
+  noteheadWidth: number,
+  dotCenters: readonly number[],
+): NoteheadExtent {
+  const extent = noteheadExtent(noteOffsets, noteheadWidth)
+  let right = extent.right
+  for (const center of dotCenters) right = Math.max(right, center + DOT_RADIUS)
+  return { left: extent.left, right }
+}
+
+export function appendDot(
+  svg: SVGSVGElement,
+  dot: { x: number; y: number },
+  color: string,
+  attrs: { staff: string; startTick: number; midi: number },
+): SVGCircleElement {
+  const circle = document.createElementNS(SVG_NS, 'circle')
+  circle.setAttribute('cx', String(dot.x))
+  circle.setAttribute('cy', String(dot.y))
+  circle.setAttribute('r', String(Math.round(DOT_RADIUS * 1000) / 1000))
+  circle.setAttribute('fill', color)
+  circle.setAttribute('data-dot', 'augmentation')
+  circle.setAttribute('data-staff', attrs.staff)
+  circle.setAttribute('data-start-tick', String(attrs.startTick))
+  circle.setAttribute('data-midi', String(attrs.midi))
+  svg.append(circle)
+  return circle
 }
 
 export function appendStem(

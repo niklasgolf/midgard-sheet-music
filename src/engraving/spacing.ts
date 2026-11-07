@@ -13,7 +13,8 @@ import type { NoteheadExtent } from './chord-offset.ts'
  *
  * Each written onset is one column, shared by both staves. The gap from one
  * column to the next keeps the facing noteheads apart, then adds room for the
- * written time between them. A notehead shifted sideways widens that minimum.
+ * written time between them. A notehead shifted sideways, or an augmentation
+ * dot beyond it, widens that minimum through the column's right extent.
  * This is not a MIDI timeline and not VexFlow's softmax spacing.
  */
 

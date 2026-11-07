@@ -10,13 +10,8 @@ import {
   staffTopY,
   TREBLE_BOTTOM_DIATONIC,
 } from '../engraving/geometry.ts'
-import {
-  defaultStemDirection,
-  noteheadExtent,
-  placeChordNoteheads,
-  type StemDirection,
-} from '../engraving/chord-offset.ts'
-import { appendStem, durationHasStem, stemGeometry } from '../engraving/symbols.ts'
+import { defaultStemDirection, placeChordNoteheads, type StemDirection } from '../engraving/chord-offset.ts'
+import { appendDot, appendStem, durationHasStem, extentWithDots, placeAugmentationDots, stemGeometry } from '../engraving/symbols.ts'
 import { fractionKey } from '../interpretation/duration.ts'
 import { columnX, spaceColumns } from '../engraving/spacing.ts'
 import type { MeasureContent, MeasurePitch, RhythmicColumn, StaffEvent } from '../interpretation/measure-content.ts'
@@ -81,10 +76,18 @@ type PlacedHead = {
   displaced: boolean
 }
 
+type PlacedDot = {
+  offsetX: number
+  staffStep: number
+  midi: number
+  startTick: number
+}
+
 type PlacedEvent = {
   event: StaffEvent
   direction: StemDirection
   heads: PlacedHead[]
+  dots: PlacedDot[]
 }
 
 function placeColumn(column: RhythmicColumn): {
@@ -94,6 +97,7 @@ function placeColumn(column: RhythmicColumn): {
 } {
   const events: PlacedEvent[] = []
   const offsets: number[] = []
+  const dotCenters: number[] = []
   for (const event of column.events) {
     const bottom = event.staff === 'bass' ? BASS_BOTTOM_DIATONIC : TREBLE_BOTTOM_DIATONIC
     const steps = event.pitches.map((pitch) => pitchStaffStep(pitch.midi, bottom))
@@ -110,9 +114,27 @@ function placeColumn(column: RhythmicColumn): {
         displaced: placement?.displaced ?? false,
       }
     })
-    events.push({ event, direction, heads })
+    const dots: PlacedDot[] = []
+    if (event.duration.dots === 1) {
+      const positions = placeAugmentationDots(
+        heads.map((head) => ({ x: head.offsetX, staffStep: head.staffStep })),
+        NOTE_RX,
+      )
+      positions.forEach((position, index) => {
+        const pitch = heads[index]?.pitch
+        if (pitch === undefined) return
+        dots.push({
+          offsetX: position.x,
+          staffStep: position.staffStep,
+          midi: pitch.midi,
+          startTick: pitch.startTick,
+        })
+        dotCenters.push(position.x)
+      })
+    }
+    events.push({ event, direction, heads, dots })
   }
-  return { onset: column.onset, extent: noteheadExtent(offsets, NOTEHEAD_WIDTH), events }
+  return { onset: column.onset, extent: extentWithDots(offsets, NOTEHEAD_WIDTH, dotCenters), events }
 }
 
 function drawEvent(
@@ -140,6 +162,13 @@ function drawEvent(
   }
   for (const head of group.heads) {
     drawPitch(svg, frame, group.event, head.pitch, anchorX + head.offsetX)
+  }
+  for (const dot of group.dots) {
+    appendDot(svg, { x: anchorX + dot.offsetX, y: noteheadY(bottomY, dot.staffStep) }, INK, {
+      staff: group.event.staff,
+      startTick: dot.startTick,
+      midi: dot.midi,
+    })
   }
 }
 
