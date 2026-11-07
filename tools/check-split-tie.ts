@@ -182,7 +182,11 @@ const bar15Plain = contentFor(bar15, false)
 const bar15Tied = contentFor(bar15, true)
 sameList(unresolvedKeys(bar15Plain), unresolvedKeys(bar15Tied), 'Bar 15 unresolved notes')
 if (pitchCount(bar15Plain) !== pitchCount(bar15Tied)) fail('Bar 15 pitch count changed.')
-if (bar15Tied.ties.length !== 0) fail('Bar 15 gained a tie.')
+sameList(
+  bar15Tied.ties.map((tie) => `${tie.id}:${tie.role}`),
+  ['tie:2:69:16896:0:outgoing'],
+  'Bar 15 A4 tie',
+)
 const bar15Keys = unresolvedKeys(bar15Tied)
 sameList(bar15Keys.filter((key) => key.startsWith('2:69:')), ['2:69:16800:52', '2:69:16852:44'], 'Bar 15 short A4s')
 
@@ -228,18 +232,26 @@ if (contentFor(bar12, true).ties.some((tie) => tie.soundingStartTick === 12192))
   fail('Bar 11’s ties continued into Bar 12.')
 }
 
-let recognizedWhole = false
-for (const measure of plan.measures) {
-  const content = contentFor(measure, true)
-  for (const column of content.columns) {
-    for (const event of column.events) {
-      if (event.pitches.some((pitch) => pitch.midi === 69 && pitch.startTick === 16896 && pitch.durationTicks === 1536)) {
-        recognizedWhole = event.duration.base === 'whole'
-      }
-    }
-  }
+const bar16 = plan.measures[16]
+if (bar16 === undefined) fail('Bar 16 is missing.')
+const bar16Tied = contentFor(bar16, true)
+const halves = [bar15Tied, bar16Tied].flatMap((content) =>
+  content.columns.flatMap((column) =>
+    column.events.flatMap((event) =>
+      event.pitches
+        .filter((pitch) => pitch.midi === 69 && pitch.sounding?.startTick === 16896)
+        .map((pitch) => `${pitch.startTick}:${pitch.durationTicks}:${event.duration.base}`),
+    ),
+  ),
+)
+if (halves.join(',') !== '16896:768:half,17664:768:half') {
+  fail(`The sustained A4 is written as ${halves.join(',')}.`)
 }
-if (!recognizedWhole) fail('The A4 at tick 16896 should stay a written whole note.')
+sameList(
+  bar16Tied.ties.map((tie) => `${tie.id}:${tie.role}`),
+  ['tie:2:69:16896:0:incoming'],
+  'Bar 16 A4 tie',
+)
 
 const sharp = midi.notes.filter((note) => note.track === 2 && note.midi === 73 && note.startTick === 12192)
 const upper = midi.notes.filter((note) => note.track === 2 && note.midi === 76 && note.startTick === 12192)

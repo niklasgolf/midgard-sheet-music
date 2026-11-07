@@ -37,10 +37,24 @@ export const SONG_B_BAR11_E: SustainedNoteReading = {
   ties: [true, false],
 }
 
+/**
+ * The principal A4 in Bars 15 and 16.
+ * One MIDI sound is written as two tied half notes, one in each measure.
+ */
+export const SONG_B_BAR15_A4_HALVES: SustainedNoteReading = {
+  track: 2,
+  midi: 69,
+  startTick: 16896,
+  endTick: 18432,
+  written: ['half', 'half'],
+  ties: [true],
+}
+
 export const SONG_B_READINGS: readonly SustainedNoteReading[] = [
   SONG_B_BAR5_D4,
   SONG_B_BAR11_CSHARP,
   SONG_B_BAR11_E,
+  SONG_B_BAR15_A4_HALVES,
 ]
 
 /** The sixteenth A4 in Bar 15. The key is released early, before the written note ends. */

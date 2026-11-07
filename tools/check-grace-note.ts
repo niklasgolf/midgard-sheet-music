@@ -16,7 +16,7 @@ import {
   GRACE_SCALE,
 } from '../src/engraving/grace-note.ts'
 import { columnX, NOTEHEAD_EDGE_GAP, PIXELS_PER_QUARTER, spaceColumns } from '../src/engraving/spacing.ts'
-import { TIE_BOW, TIE_THICKNESS, tieCurve } from '../src/engraving/tie.ts'
+import { TIE_BOW, TIE_EDGE_INSET, TIE_NOTE_GAP, TIE_THICKNESS, tieAttachmentY, tieCurve, tieEndpoints, tieSideForStep } from '../src/engraving/tie.ts'
 import { fractionFromQuarters, fractionKey } from '../src/interpretation/duration.ts'
 import { buildMeasureContent, pitchCount, type MeasureContent } from '../src/interpretation/measure-content.ts'
 import { assignPianoStaffs } from '../src/interpretation/staff.ts'
@@ -134,11 +134,62 @@ if (grace.durationTicks !== 44 || grace.endTick !== 16896) fail('The grace note 
 
 const principal = bar15.columns.flatMap((column) =>
   column.events.flatMap((event) =>
-    event.pitches.filter((pitch) => pitch.midi === 69 && pitch.startTick === 16896),
+    event.pitches
+      .filter((pitch) => pitch.midi === 69 && pitch.startTick === 16896)
+      .map((pitch) => ({ pitch, base: event.duration.base })),
   ),
 )
-if (principal.length !== 1 || principal[0]?.durationTicks !== 1536) {
-  fail('The principal A4 is no longer the 1536-tick catalog note.')
+if (principal.length !== 1 || principal[0]?.base !== 'half' || principal[0].pitch.durationTicks !== 768) {
+  fail('The first written A4 is not a half note.')
+}
+if (principal[0]?.pitch.sounding?.durationTicks !== 1536 || principal[0].pitch.sounding.endTick !== 18432) {
+  fail('The first half note lost the original 1536-tick MIDI sound.')
+}
+const bar15Tie = bar15.ties.filter((tie) => tie.midi === 69)
+if (bar15Tie.length !== 1 || bar15Tie[0]?.id !== 'tie:2:69:16896:0' || bar15Tie[0].role !== 'outgoing') {
+  fail('Bar 15 should have one outgoing A4 tie.')
+}
+
+const bar16Measure = measures.measures[16]
+if (bar16Measure === undefined) fail('Bar 16 is missing.')
+const bar16 = contentFor(bar16Measure.span, bar16Measure.quarters)
+const continuation = bar16.columns.flatMap((column) =>
+  column.events.flatMap((event) =>
+    event.pitches
+      .filter((pitch) => pitch.midi === 69 && pitch.startTick === 17664)
+      .map((pitch) => ({ pitch, base: event.duration.base, pitches: event.pitches.map((item) => item.midi).sort((left, right) => left - right) })),
+  ),
+)
+if (continuation.length !== 1 || continuation[0]?.base !== 'half' || continuation[0].pitch.durationTicks !== 768) {
+  fail('Bar 16 is missing the second A4 half note.')
+}
+if (continuation[0]?.pitches.join(',') !== '69,73,81') fail(`The Bar 16 treble chord is ${continuation[0]?.pitches.join(',')}.`)
+const downbeat = bar16.columns.flatMap((column) => column.events.flatMap((event) => event.pitches.map((pitch) => pitch.midi)))
+if ([69, 73, 81, 57, 64].some((midiPitch) => !downbeat.includes(midiPitch)) || downbeat.length < 5) {
+  fail(`Bar 16 downbeat pitches are ${downbeat.join(',')}.`)
+}
+const bar16Tie = bar16.ties.filter((tie) => tie.midi === 69)
+if (bar16Tie.length !== 1 || bar16Tie[0]?.id !== 'tie:2:69:16896:0' || bar16Tie[0].role !== 'incoming') {
+  fail('Bar 16 should have one incoming A4 tie.')
+}
+if (bar16.graceNotes.length !== 0) fail('Bar 16 gained a grace note.')
+const side = tieSideForStep(pitchStaffStep(69, TREBLE_BOTTOM_DIATONIC))
+if (side !== 1) fail('The A4 tie should bow downward.')
+const attachment = tieAttachmentY(90, side, NOTE_RY)
+const outgoing = tieEndpoints({ role: 'outgoing', staffLeft: 16, staffRight: 300, noteRadiusX: NOTE_RX, fromX: 120 })
+const incoming = tieEndpoints({ role: 'incoming', staffLeft: 16, staffRight: 300, noteRadiusX: NOTE_RX, toX: 80 })
+if (outgoing === undefined || incoming === undefined) fail('A split-tie piece has no endpoints.')
+if (outgoing.endX !== 300 - TIE_EDGE_INSET || incoming.startX !== 16 + TIE_EDGE_INSET) {
+  fail('A split-tie piece leaves its measure.')
+}
+if (outgoing.startX !== 120 + NOTE_RX + TIE_NOTE_GAP || incoming.endX !== 80 - NOTE_RX - TIE_NOTE_GAP) {
+  fail('A split-tie piece does not stop at the notehead.')
+}
+const outgoingCurve = tieCurve({ startX: outgoing.startX, endX: outgoing.endX, startY: attachment, endY: attachment, side })
+const incomingCurve = tieCurve({ startX: incoming.startX, endX: incoming.endX, startY: attachment, endY: attachment, side })
+if (outgoingCurve.thickness !== TIE_THICKNESS || incomingCurve.thickness !== TIE_THICKNESS) fail('The A4 tie pieces differ in thickness.')
+if (outgoingCurve.bow !== TIE_BOW || incomingCurve.bow !== TIE_BOW || outgoingCurve.side !== incomingCurve.side) {
+  fail('The A4 tie pieces differ in curvature.')
 }
 
 const step = pitchStaffStep(69, TREBLE_BOTTOM_DIATONIC)
@@ -211,6 +262,7 @@ if (slur.bow !== TIE_BOW * GRACE_SCALE || slur.thickness !== TIE_THICKNESS * GRA
   fail('The short slur does not use the shared curve at grace scale.')
 }
 if (slur.endX >= principalX - NOTE_RX || slur.startX <= graceX) fail('The short slur runs through a notehead.')
+if (slur.endX >= principalX + NOTE_RX + TIE_NOTE_GAP) fail('The grace slur reaches the outgoing tie.')
 const ordinary = tieCurve({ startX: 10, endX: 40, startY: 20, endY: 20, side: 1 })
 if (ordinary.bow !== TIE_BOW || ordinary.thickness !== TIE_THICKNESS) fail('Existing ties no longer use the shared bow and thickness.')
 if (graceX <= 0 || placedFlag.maxX >= withGrace.contentRight) fail('Grace-note ink leaves the measure content.')
@@ -225,16 +277,23 @@ const bar5Plain = contentFor(bar5Measure.span, bar5Measure.quarters, {
   writtenDurations: [],
   graceNotes: [],
 })
-if (tieIds(bar5) !== tieIds(bar5Plain) || bar5.graceNotes.length !== 0) fail('Bar 5 changed when Bar 15 readings were present.')
+if (tieIds(bar5) !== 'tie:2:62:5280:0,tie:2:62:5280:1' || bar5.graceNotes.length !== 0) {
+  fail('Bar 5 changed when the A4 half notes were added.')
+}
+if (tieIds(bar5) !== tieIds(bar5Plain)) fail('Bar 5 changed when Bar 15 readings were present.')
 const bar11 = contentFor(bar11Measure.span, bar11Measure.quarters)
 const bar11Plain = contentFor(bar11Measure.span, bar11Measure.quarters, {
   sustainedNotes: SONG_B_READINGS,
   writtenDurations: [],
   graceNotes: [],
 })
-if (tieIds(bar11) !== tieIds(bar11Plain) || pitchCount(bar11) !== pitchCount(bar11Plain)) {
-  fail('Bar 11 changed when Bar 15 readings were present.')
+if (tieIds(bar11) !== 'tie:2:73:12192:0,tie:2:76:12192:0' || pitchCount(bar11) !== pitchCount(bar11Plain)) {
+  fail('Bar 11 changed when the A4 half notes were added.')
 }
+const bar6Measure = measures.measures[6]
+if (bar6Measure === undefined) fail('Bar 6 is missing.')
+const bar6 = contentFor(bar6Measure.span, bar6Measure.quarters)
+if (tieIds(bar6) !== 'tie:2:62:5280:1') fail('Bar 6 no longer has the incoming D4 tie.')
 
 const songA = parseMidi(new Uint8Array(readFileSync('midi-files/chopin-prelude-op-28-no-7-in-a-major.mid')))
 if (songA.notes.length !== 176) fail(`Song A should still have 176 MIDI notes, found ${songA.notes.length}.`)

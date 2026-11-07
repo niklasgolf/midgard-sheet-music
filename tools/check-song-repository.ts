@@ -15,6 +15,7 @@ import {
   SONG_B_BAR11_CSHARP,
   SONG_B_BAR11_E,
   SONG_B_BAR15_A4_GRACE,
+  SONG_B_BAR15_A4_HALVES,
   SONG_B_BAR15_A4_SIXTEENTH,
   SONG_B_BAR5_D4,
   SONG_B_ID,
@@ -180,8 +181,11 @@ if (keptTies.musicalInterpretation.sustainedNotes?.[1]?.ties?.join(',') !== 'tru
 
 const fresh = memoryRepository(original)
 const batch = await installSustainedReadings(fresh.repository, SONG_B_ID, SONG_B_READINGS)
-if (batch.status !== 'installed' || fresh.saved.length !== 1) fail('The three Song B readings should be saved once.')
-if (batch.song.musicalInterpretation.sustainedNotes?.length !== 3) fail('Song B did not receive both Bar 11 readings.')
+if (batch.status !== 'installed' || fresh.saved.length !== 1) fail('The Song B readings should be saved once.')
+const batchNotes = batch.song.musicalInterpretation.sustainedNotes
+if (batchNotes?.map((note) => note.midi).join(',') !== '62,73,76,69') {
+  fail('Song B did not receive the Bar 5, Bar 11, and A4 readings.')
+}
 if (batch.song.musicalInterpretation.ticksPerWrittenQuarter !== 384) fail('The batch install changed Song Settings.')
 if (batch.song.originalMidi !== original.originalMidi) fail('The batch install replaced the MIDI object.')
 if (JSON.stringify(batch.song.originalMidi.notes) !== JSON.stringify(original.originalMidi.notes)) {
@@ -196,7 +200,9 @@ const appended = await installSustainedReadings(seeded.repository, SONG_B_ID, SO
 if (appended.status !== 'installed' || seeded.saved.length !== 1) fail('Adding Bar 11 should save once beside the stored D4.')
 const appendedNotes = appended.song.musicalInterpretation.sustainedNotes
 if (appendedNotes?.[0] !== bar5Reading) fail('The stored Bar 5 reading was replaced.')
-if (appendedNotes?.length !== 3) fail('Bar 11 was not added beside the D4.')
+if (appendedNotes?.map((note) => note.midi).join(',') !== '62,73,76,69') {
+  fail('Bar 11 and the A4 halves were not added beside the D4.')
+}
 const appendedAgain = await installSustainedReadings(seeded.repository, SONG_B_ID, SONG_B_READINGS)
 if (appendedAgain.status !== 'unchanged' || seeded.saved.length !== 1) fail('Bar 11 was written a second time.')
 
@@ -224,9 +230,19 @@ const withTies = songFor(SONG_B_ID, midi, {
 const part = memoryRepository(withTies)
 const bar15 = await installSongBInterpretations(part.repository)
 if (bar15.status !== 'installed' || part.saved.length !== 1) fail('Bar 15 should be saved once beside the existing ties.')
-if (bar15.song.musicalInterpretation.sustainedNotes?.length !== 3) fail('Installing Bar 15 changed the sustained notes.')
+if (bar15.song.musicalInterpretation.sustainedNotes?.length !== 4) fail('The A4 half-note reading was not stored beside the existing ties.')
 if (bar15.song.musicalInterpretation.sustainedNotes?.[0] !== withTies.musicalInterpretation.sustainedNotes?.[0]) {
   fail('The stored Bar 5 reading was replaced.')
+}
+if (bar15.song.musicalInterpretation.sustainedNotes?.[1] !== withTies.musicalInterpretation.sustainedNotes?.[1]) {
+  fail('The stored Bar 11 C♯5 reading was replaced.')
+}
+if (bar15.song.musicalInterpretation.sustainedNotes?.[2] !== withTies.musicalInterpretation.sustainedNotes?.[2]) {
+  fail('The stored Bar 11 E5 reading was replaced.')
+}
+const storedHalves = bar15.song.musicalInterpretation.sustainedNotes?.[3]
+if (storedHalves?.midi !== 69 || storedHalves.written.join(',') !== 'half,half' || storedHalves.ties?.join(',') !== 'true') {
+  fail('The stored A4 spelling is not two tied half notes.')
 }
 if (bar15.song.musicalInterpretation.writtenDurations?.length !== 1) fail('The sixteenth override was not stored.')
 if (bar15.song.musicalInterpretation.graceNotes?.length !== 1) fail('The grace note was not stored.')
@@ -245,6 +261,9 @@ const keptSettings = applySongSettings(bar15.song, {
   pickup: settings.pickup,
   ticksPerWrittenQuarter: settings.ticksPerWrittenQuarter,
 })
+if (keptSettings.musicalInterpretation.sustainedNotes?.[3]?.ties?.join(',') !== 'true') {
+  fail('Song Settings removed the A4 tie.')
+}
 if (keptSettings.musicalInterpretation.graceNotes?.length !== 1) fail('Song Settings removed the grace note.')
 if (keptSettings.musicalInterpretation.writtenDurations?.[0]?.writtenEndTick !== 16896) {
   fail('Song Settings removed the written-duration override.')

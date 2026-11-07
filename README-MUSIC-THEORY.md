@@ -197,7 +197,7 @@ On startup, `ensureProjectSongs` looks up two project ids through the repository
 
 Song A’s id is the one already used by the first import. It is kept. Song B is a different record. If an id is already stored, that record’s MIDI and settings are left alone. If it is missing, the MIDI is parsed once and the Song is inserted with an empty interpretation. The dropdown is then filled from `listSongs()`, not from this table. A later import will appear there without a change to the menu.
 
-After the library is loaded, one install looks at Song B only. It carries the confirmed spellings: the Bar 5 D4, the Bar 11 C♯5 and E5, the Bar 15 written sixteenth, and the Bar 15 grace note. Each spelling is added only when Part B still contains that exact MIDI event and Part C does not already spell it. A grace note is also checked against the principal note it names. Missing spellings are appended in one save. A second startup finds them and does not write. A Bar 5 reading stored without tie flags still means both junctions are tied, so the install does not rewrite it. If Part C already spells the same event with a different written value, different tie flags, or a different grace-note reading, that stored spelling stays and the install says so. Song A is not part of the install. Parts A and B, and every other Part C field, stay as they were. This is not a schema migration. The database version stays 1.
+After the library is loaded, one install looks at Song B only. It carries the confirmed spellings: the Bar 5 D4, the Bar 11 C♯5 and E5, the Bar 15 and 16 A4 halves, the Bar 15 written sixteenth, and the Bar 15 grace note. Each spelling is added only when Part B still contains that exact MIDI event and Part C does not already spell it. A grace note is also checked against the principal note it names. Missing spellings are appended in one save. A second startup finds them and does not write. A Bar 5 reading stored without tie flags still means both junctions are tied, so the install does not rewrite it. If Part C already spells the same event with a different written value, different tie flags, or a different grace-note reading, that stored spelling stays and the install says so. Song A is not part of the install. Parts A and B, and every other Part C field, stay as they were. This is not a schema migration. The database version stays 1.
 
 After a refresh, the page selects Song A when that id is present. It does not yet remember which Song was selected last. That memory is planned, not implemented. The saved spelling is still in Song B, and drawing reads it from the loaded record.
 
@@ -739,7 +739,7 @@ Song B’s Bar 15, in this reading, is ticks 16512–17664. Track 2 plays three 
 |---|---:|---:|---:|---|
 | 69 | 16800 | 16852 | 52 | A normal sixteenth, through tick 16896 |
 | 69 | 16852 | 16896 | 44 | One grace note |
-| 69 | 16896 | 18432 | 1536 | The principal note. Its written spelling is unchanged |
+| 69 | 16896 | 18432 | 1536 | Two tied half notes, one in Bar 15 and one in Bar 16 |
 
 The first event is the upper note of the sixteenth chord that also contains C♯4 (MIDI 61), which already lasts 96 ticks from 16800. The A4 key is released early so it can be struck again. The written value is still a sixteenth. It shares that chord, it is a normal black notehead with a stem, and it is not tied.
 
@@ -759,9 +759,19 @@ Part C stores the two decisions separately from `sustainedNotes`:
 }
 ```
 
-The principal A4 still lasts 1536 ticks. The catalog accepts that duration as a whole note, so this step does not change it. The sound continues into Bar 16, and the printed page shows a different written spelling. That spelling is a later sustained-note question. The grace note is attached to the MIDI event at tick 16896, so it can stay with that note when the spelling changes.
+The third event is one sustained sound written as two half notes. Part C stores it on `sustainedNotes`, in the same form as the Bar 5 D4:
 
-Beams, the long phrase slur, hairpins, and fingerings are still absent. Bar 15 can be compared with the PDF for these two A4s. It is not yet a complete engraving of that bar.
+```typescript
+{ track: 2, midi: 69, startTick: 16896, endTick: 18432, written: ['half', 'half'], ties: [true] }
+```
+
+768 + 768 = 1536. The first half begins at tick 16896, which is beat 2 of Bar 15, and ends on the barline at 17664. The second half begins at 17664, beat 1 of Bar 16, and ends at 18432. There is one logical tie. Bar 15 draws the outgoing piece toward its own right edge. Bar 16 draws the incoming piece from its own left edge. Both pieces use the existing Split Tie: the same thickness, the same bow, and a downward curve, because A4 sits below the middle line and it is the only note in that tie. Neither curve enters the other measure’s SVG.
+
+The grace note stays attached to the first half, because that written note still begins at tick 16896. Its small head, upward stem, eighth-note flag, and short slur stay in Bar 15. The slur ends to the left of the half note. The outgoing tie leaves from the right. Bar 16 does not gain a grace note.
+
+In Bar 16 the second half joins the C♯5 and A5 halves that already begin at tick 17664. With the bass A3 and E4, that downbeat has five noteheads. The original MIDI event remains one note from 16896 to 18432.
+
+The half notes are still drawn with the engine’s filled notehead. Open half-note heads, and the separate stem directions printed for A4 and the notes above it, are not part of this spelling. Beams, the long phrase slur, hairpins, and fingerings are still absent. Bars 15 and 16 can be compared with the PDF for these A4s. They are not yet a complete engraving of those bars.
 
 ## 15. The SVG experiment
 
@@ -792,7 +802,7 @@ The first engraving target was a professionally readable Bar 0 and Bar 1. The ex
 
 The engine stays general. Another Song, or a later measure, must be drawable without a new piece of Chopin-specific drawing code. The Bar 5 reading is a musical conclusion stored on Song B. The renderer does not contain that Song’s id.
 
-Clefs, beams, rests, accidentals, and music-font glyphs remain. Song B’s Bar 11 spellings and Bar 15 sixteenth and grace note are stored. The principal A4 that lasts 1536 ticks is still the catalog whole note.
+Clefs, beams, rests, accidentals, and music-font glyphs remain. Song B’s Bar 11 spellings, Bar 15 sixteenth and grace note, and the tied A4 halves in Bars 15 and 16 are stored.
 
 ## 17. What works today, and what does not
 
@@ -822,6 +832,7 @@ Implemented:
 - A written duration that can differ from the MIDI note-off, stored on `writtenDurations`, without creating a tie
 - A grace note stored on `graceNotes`: smaller head, short stem, ornamental flag, optional slash, and an optional short slur, placed before its principal note and left out of the beat count
 - Song B’s Bar 15 sixteenth A4 and its one unslashed grace-note A4, stored in Part C
+- Song B’s principal A4, written as a half note in Bar 15 tied to a half note in Bar 16, using the existing Split Tie
 - A local copy of the VexFlow source, kept for study and not used as the renderer
 
 Decided, and not implemented:
@@ -871,7 +882,7 @@ We compare an interpretation with the original PDF before treating it as settled
 
 The early investigation of VexFlow, the Song model, and the first SVG has already been carried into the experiment described above. This README is not a numbered build plan.
 
-Song B’s Bar 5 D4 is stored as three written notes and drawn with a Split Tie. Song B’s Bar 11 C♯5 and E5 are stored as a sixteenth tied to a quarter, followed by a repeated quarter, with the two ties on opposite sides of the chord. Song B’s Bar 15 writes the 52-tick A4 as a sixteenth and the 44-tick A4 as one unslashed grace note. The 1536-tick principal A4 is still the catalog whole note. Beams, phrase slurs, hairpins, and fingerings are not part of this step. The database remains IndexedDB until a complete composition can be rendered. Convex is the planned replacement, behind `SongRepository`, and it is not part of the current code.
+Song B’s Bar 5 D4 is stored as three written notes and drawn with a Split Tie. Song B’s Bar 11 C♯5 and E5 are stored as a sixteenth tied to a quarter, followed by a repeated quarter, with the two ties on opposite sides of the chord. Song B’s Bar 15 writes the 52-tick A4 as a sixteenth and the 44-tick A4 as one unslashed grace note. The 1536-tick A4 is stored as two tied half notes, with the Split Tie divided between Bar 15 and Bar 16. Beams, phrase slurs, hairpins, and fingerings are not part of this step. The database remains IndexedDB until a complete composition can be rendered. Convex is the planned replacement, behind `SongRepository`, and it is not part of the current code.
 
 Each implementation step after that review should be small enough to:
 
@@ -891,7 +902,7 @@ These questions are deliberately unanswered. A decision elsewhere in this docume
 Music and interpretation:
 
 - How should the general tie rule choose written values when a MIDI duration is not itself a catalog value? Section 14 shows two confirmed results: the Bar 5 D4, and the Bar 11 sixteenth, quarter, and repeated quarter. The procedure that discovers a spelling for any Song is not chosen.
-- How should the remaining unresolved notes in these preludes be written? Bar 15’s 52-tick A4 is now a written sixteenth, and its 44-tick A4 is a grace note. The A4 of 1536 ticks is still the catalog whole note, and its printed spelling is not chosen.
+- How should the remaining unresolved notes in these preludes be written? Bar 15’s 52-tick A4 is a written sixteenth, its 44-tick A4 is a grace note, and its 1536-tick A4 is two tied half notes. Open half-note heads and the printed stem directions of that chord are not chosen yet.
 - How should musical voices be represented when one hand plays more than one line?
 - How should rests be inferred when the MIDI file simply has silence?
 - Which decisions belong in the shared Song, and which belong only to 3A or only to 3B?
