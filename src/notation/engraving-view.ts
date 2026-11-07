@@ -52,11 +52,6 @@ export function renderEngraving(container: HTMLElement, song: Song): void {
     )
   }
   container.replaceChildren(title, grid)
-  const widest = Math.max(
-    0,
-    ...[...grid.querySelectorAll<HTMLElement>('.engraving__item')].map((item) => item.offsetWidth),
-  )
-  if (widest > 0) grid.style.gridTemplateColumns = `repeat(3, ${widest}px)`
 }
 
 function measureBlock(

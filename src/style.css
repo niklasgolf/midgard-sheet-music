@@ -21,8 +21,10 @@ body {
 }
 
 body {
-  display: flex;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  justify-items: center;
   height: 100vh;
   height: 100dvh;
   padding-block: 20px;
@@ -40,6 +42,7 @@ body {
   grid-template-rows: minmax(0, 1fr);
   width: 3200px;
   max-width: 100%;
+  min-width: 0;
   height: 100%;
   min-height: 0;
   overflow-x: auto;
@@ -100,8 +103,7 @@ body {
 }
 
 .library__field {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 4px;
   color: #2a1a0e;
 }
@@ -196,6 +198,9 @@ body {
 }
 
 .settings__form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
   max-width: none;
 }
 
@@ -218,8 +223,7 @@ body {
 }
 
 .settings__field {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 4px;
   margin: 0 0 12px;
   color: #2a1a0e;
@@ -230,7 +234,8 @@ body {
 }
 
 .settings__time {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 8px;
 }
@@ -261,13 +266,17 @@ body {
 }
 
 .settings__choices {
-  display: flex;
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: start;
   gap: 18px;
 }
 
 .settings__choice {
-  display: flex;
+  display: grid;
+  grid-auto-flow: column;
   align-items: center;
+  justify-content: start;
   gap: 6px;
 }
 
@@ -324,27 +333,26 @@ body {
 
 .engraving__grid {
   display: grid;
-  grid-template-columns: repeat(3, max-content);
-  column-gap: 24px;
-  row-gap: 48px;
-  width: max-content;
-  min-width: 100%;
-  box-sizing: border-box;
-  margin: 28px auto 8px;
-  padding-inline: 8px;
-  justify-content: center;
-  justify-items: center;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 12px;
+  row-gap: 28px;
+  width: 100%;
+  margin: 16px 0 0;
+  justify-items: stretch;
   align-items: start;
 }
 
 .engraving__item {
-  width: max-content;
-  max-width: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  align-content: start;
+  min-width: 0;
 }
 
 .engraving__caution {
-  width: 0;
-  min-width: 100%;
+  width: 100%;
+  min-width: 0;
 }
 
 .engraving__warning {
@@ -392,7 +400,9 @@ body {
 .engraving .measure {
   box-sizing: border-box;
   width: max-content;
-  margin: 0 auto;
+  max-width: none;
+  justify-self: center;
+  margin: 0;
   padding: 8px 4px 0;
   border: 2px solid #00ff00;
   background: transparent;
@@ -462,7 +472,8 @@ body {
 }
 
 .measure__event {
-  display: flex;
+  display: grid;
+  grid-template-columns: 3.2em minmax(0, 1fr);
   gap: 16px;
   margin: 0;
   padding: 8px 0;
@@ -471,7 +482,6 @@ body {
 }
 
 .measure__tick {
-  flex: 0 0 3.2em;
   color: #5c4030;
   font-variant-numeric: tabular-nums;
 }
@@ -558,8 +568,8 @@ body {
   }
 
   .engraving__grid {
-    column-gap: 24px;
-    row-gap: 36px;
-    margin: 24px auto 8px;
+    column-gap: 12px;
+    row-gap: 24px;
+    margin-top: 12px;
   }
 }
