@@ -10,8 +10,14 @@ import {
   staffTopY,
   TREBLE_BOTTOM_DIATONIC,
 } from '../engraving/geometry.ts'
+import {
+  defaultStemDirection,
+  noteheadExtent,
+  placeChordNoteheads,
+} from '../engraving/chord-offset.ts'
+import { fractionKey } from '../interpretation/duration.ts'
 import { columnX, spaceColumns } from '../engraving/spacing.ts'
-import type { MeasureContent, MeasurePitch, StaffEvent } from '../interpretation/measure-content.ts'
+import type { MeasureContent, MeasurePitch, RhythmicColumn, StaffEvent } from '../interpretation/measure-content.ts'
 import { pitchCount } from '../interpretation/measure-content.ts'
 import type { PianoStaff } from '../interpretation/staff.ts'
 
@@ -24,14 +30,20 @@ const NOTE_RX = 8
 const NOTE_RY = 5.5
 const INK = '#2a1a0e'
 
+const NOTEHEAD_WIDTH = NOTE_RX * 2
+
 export function measureSvg(options: {
   label: string
   content: Extract<MeasureContent, { ready: true }>
 }): SVGSVGElement {
+  const placed = options.content.columns.map((column) => placeColumn(column))
+  const extents = new Map(placed.map((column) => [fractionKey(column.onset), column.extent]))
   const spacing = spaceColumns({
     onsets: options.content.columns.map((column) => column.onset),
     measureQuarters: options.content.measureQuarters,
     originX: NOTE_AREA_LEFT,
+    extents,
+    noteheadWidth: NOTEHEAD_WIDTH,
   })
   const width = spacing.contentRight + NOTE_AREA_RIGHT + STAFF_INSET
   const frame = grandStaffFrame()
@@ -50,16 +62,34 @@ export function measureSvg(options: {
   drawStaff(svg, staffLeft, staffRight, frame.bassBottomY)
   drawRightBarline(svg, staffRight, frame.trebleBottomY, frame.bassBottomY)
 
-  for (const column of options.content.columns) {
+  for (const column of placed) {
     const x = columnX(spacing, column.onset)
-    for (const event of column.events) {
-      for (const pitch of event.pitches) {
-        drawPitch(svg, frame, event, pitch, x)
-      }
+    for (const pitch of column.pitches) {
+      drawPitch(svg, frame, pitch.event, pitch.pitch, x + pitch.offsetX)
     }
   }
 
   return svg
+}
+
+function placeColumn(column: RhythmicColumn): {
+  onset: RhythmicColumn['onset']
+  extent: { left: number; right: number }
+  pitches: { event: StaffEvent; pitch: MeasurePitch; offsetX: number }[]
+} {
+  const pitches: { event: StaffEvent; pitch: MeasurePitch; offsetX: number }[] = []
+  const offsets: number[] = []
+  for (const event of column.events) {
+    const bottom = event.staff === 'bass' ? BASS_BOTTOM_DIATONIC : TREBLE_BOTTOM_DIATONIC
+    const steps = event.pitches.map((pitch) => pitchStaffStep(pitch.midi, bottom))
+    const placed = placeChordNoteheads(steps, defaultStemDirection(steps), NOTEHEAD_WIDTH)
+    event.pitches.forEach((pitch, index) => {
+      const offsetX = placed[index]?.offsetX ?? 0
+      pitches.push({ event, pitch, offsetX })
+      offsets.push(offsetX)
+    })
+  }
+  return { onset: column.onset, extent: noteheadExtent(offsets, NOTEHEAD_WIDTH), pitches }
 }
 
 function drawPitch(
