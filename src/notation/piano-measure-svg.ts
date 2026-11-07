@@ -1,13 +1,21 @@
-import type { MidiNote, MidiTrackInfo } from '../midi/parse-midi.ts'
+import {
+  BASS_BOTTOM_DIATONIC,
+  grandStaffFrame,
+  ledgerSteps,
+  noteheadY,
+  pitchStaffStep,
+  STAFF_LINE_COUNT,
+  STAFF_SPACE,
+  staffLineY,
+  staffTopY,
+  TREBLE_BOTTOM_DIATONIC,
+} from '../engraving/geometry.ts'
+import { staffForTrack, type PianoStaff } from '../interpretation/staff.ts'
+import type { MidiNote } from '../midi/parse-midi.ts'
 import type { TickSpan } from './written-measures.ts'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
-const LINE = 14
-const STEP = LINE / 2
-const STAFF_GAP = 70
-const PAD_TOP = 22
-const PAD_BOTTOM = 28
 const STAFF_INSET = 16
 const NOTE_AREA_LEFT = 40
 const NOTE_AREA_RIGHT = 32
@@ -16,15 +24,9 @@ const NOTE_RX = 8
 const NOTE_RY = 5.5
 const INK = '#2a1a0e'
 
-const DIATONIC_FROM_C = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6]
-
-/** Bottom line of the treble staff is E4. Bottom line of the bass staff is G2. */
-const TREBLE_BOTTOM = diatonic(64)
-const BASS_BOTTOM = diatonic(43)
-
 export function measureSvg(options: {
   notes: readonly MidiNote[]
-  tracks: readonly MidiTrackInfo[]
+  staffByTrack: ReadonlyMap<number, PianoStaff>
   span: TickSpan
   spanQuarters: number
   barQuarters: number
@@ -32,39 +34,39 @@ export function measureSvg(options: {
 }): SVGSVGElement {
   const noteArea = Math.max(96, (options.spanQuarters / options.barQuarters) * FULL_BAR_WIDTH)
   const width = NOTE_AREA_LEFT + noteArea + NOTE_AREA_RIGHT
-  const trebleBottomY = PAD_TOP + 4 * LINE
-  const bassTopY = trebleBottomY + STAFF_GAP
-  const bassBottomY = bassTopY + 4 * LINE
-  const height = bassBottomY + PAD_BOTTOM
+  const frame = grandStaffFrame()
+  const staffLeft = STAFF_INSET
+  const staffRight = width - STAFF_INSET
 
   const svg = document.createElementNS(SVG_NS, 'svg')
-  svg.setAttribute('viewBox', `0 0 ${width} ${height}`)
+  svg.setAttribute('viewBox', `0 0 ${width} ${frame.height}`)
   svg.setAttribute('width', String(width))
-  svg.setAttribute('height', String(height))
+  svg.setAttribute('height', String(frame.height))
   svg.setAttribute('role', 'img')
   svg.setAttribute('aria-label', `${options.label}, ${options.notes.length} notes`)
 
-  drawStaff(svg, STAFF_INSET, width - STAFF_INSET, trebleBottomY)
-  drawStaff(svg, STAFF_INSET, width - STAFF_INSET, bassBottomY)
+  drawStaff(svg, staffLeft, staffRight, frame.trebleBottomY)
+  drawStaff(svg, staffLeft, staffRight, frame.bassBottomY)
+  drawRightBarline(svg, staffRight, frame.trebleBottomY, frame.bassBottomY)
 
   const duration = options.span.endTick - options.span.startTick
   for (const note of options.notes) {
-    const hand = handForTrack(options.tracks, note.track)
-    const staffBottom = hand === 'left' ? BASS_BOTTOM : TREBLE_BOTTOM
-    const bottomY = hand === 'left' ? bassBottomY : trebleBottomY
-    const staffStep = diatonic(note.midi) - staffBottom
-    const y = bottomY - staffStep * STEP
+    const staff = staffForTrack(options.staffByTrack, note.track)
+    const bottomY = staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
+    const bottomDiatonic = staff === 'bass' ? BASS_BOTTOM_DIATONIC : TREBLE_BOTTOM_DIATONIC
+    const step = pitchStaffStep(note.midi, bottomDiatonic)
+    const y = noteheadY(bottomY, step)
     const x = NOTE_AREA_LEFT + ((note.startTick - options.span.startTick) / duration) * noteArea
-    drawLedgerLines(svg, x, staffStep, hand === 'left' ? bassBottomY : trebleBottomY)
-    drawNotehead(svg, note, hand, x, y)
+    drawLedgerLines(svg, x, step, bottomY)
+    drawNotehead(svg, note, staff, x, y)
   }
 
   return svg
 }
 
 function drawStaff(svg: SVGSVGElement, x1: number, x2: number, bottomY: number): void {
-  for (let line = 0; line < 5; line += 1) {
-    const y = bottomY - line * LINE
+  for (let line = 0; line < STAFF_LINE_COUNT; line += 1) {
+    const y = staffLineY(bottomY, line)
     const path = document.createElementNS(SVG_NS, 'line')
     path.setAttribute('x1', String(x1))
     path.setAttribute('x2', String(x2))
@@ -76,19 +78,29 @@ function drawStaff(svg: SVGSVGElement, x1: number, x2: number, bottomY: number):
   }
 }
 
-function drawLedgerLines(svg: SVGSVGElement, x: number, staffStep: number, bottomY: number): void {
-  const lines: number[] = []
-  if (staffStep < 0) {
-    for (let step = -2; step >= staffStep; step -= 2) lines.push(step)
-  }
-  if (staffStep > 8) {
-    for (let step = 10; step <= staffStep; step += 2) lines.push(step)
-  }
-  for (const step of lines) {
-    const y = bottomY - step * STEP
+function drawRightBarline(
+  svg: SVGSVGElement,
+  x: number,
+  trebleBottomY: number,
+  bassBottomY: number,
+): void {
+  const line = document.createElementNS(SVG_NS, 'line')
+  line.setAttribute('x1', String(x))
+  line.setAttribute('x2', String(x))
+  line.setAttribute('y1', String(staffTopY(trebleBottomY)))
+  line.setAttribute('y2', String(bassBottomY))
+  line.setAttribute('stroke', INK)
+  line.setAttribute('stroke-width', '1.25')
+  line.setAttribute('data-barline', 'right')
+  svg.append(line)
+}
+
+function drawLedgerLines(svg: SVGSVGElement, x: number, step: number, bottomY: number): void {
+  for (const ledgerStep of ledgerSteps(step)) {
+    const y = noteheadY(bottomY, ledgerStep)
     const line = document.createElementNS(SVG_NS, 'line')
-    line.setAttribute('x1', String(x - 14))
-    line.setAttribute('x2', String(x + 14))
+    line.setAttribute('x1', String(x - STAFF_SPACE))
+    line.setAttribute('x2', String(x + STAFF_SPACE))
     line.setAttribute('y1', String(y))
     line.setAttribute('y2', String(y))
     line.setAttribute('stroke', INK)
@@ -100,7 +112,7 @@ function drawLedgerLines(svg: SVGSVGElement, x: number, staffStep: number, botto
 function drawNotehead(
   svg: SVGSVGElement,
   note: MidiNote,
-  hand: 'right' | 'left' | 'other',
+  staff: PianoStaff,
   x: number,
   y: number,
 ): void {
@@ -112,24 +124,6 @@ function drawNotehead(
   head.setAttribute('fill', INK)
   head.setAttribute('data-midi', String(note.midi))
   head.setAttribute('data-start-tick', String(note.startTick))
-  head.setAttribute('data-hand', hand)
+  head.setAttribute('data-staff', staff)
   svg.append(head)
-}
-
-function handForTrack(
-  tracks: readonly MidiTrackInfo[],
-  trackNumber: number,
-): 'right' | 'left' | 'other' {
-  const name = tracks.find((track) => track.track === trackNumber)?.name ?? null
-  if (name === 'Main droite') return 'right'
-  if (name === 'Main gauche') return 'left'
-  return 'other'
-}
-
-function diatonic(midi: number): number {
-  const step = DIATONIC_FROM_C[midi % 12]
-  if (step === undefined || midi < 0 || midi > 127) {
-    throw new Error(`MIDI note ${midi} is outside 0–127.`)
-  }
-  return Math.floor(midi / 12) * 7 + step
 }

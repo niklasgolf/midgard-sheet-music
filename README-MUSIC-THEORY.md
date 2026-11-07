@@ -2,96 +2,128 @@
 
 This document is the working reference for the musical ideas and software architecture of **midGard Sheet Music**. It is written for someone learning music theory and software design at the same time.
 
-The application is still early. Sections that describe storage, editing, and notation are plans, not finished features.
+Four kinds of statement appear here, and they are not the same thing:
 
-## 1. One song is one musical document
+| Kind | Meaning |
+|---|---|
+| Implemented | The application does this today |
+| Decided | We have chosen this design, whether or not the code exists yet |
+| Planned | We intend to build this, and the design is still open to the next investigation |
+| Open | We have not chosen an answer |
 
-**ONE SONG = ONE COMPLETE MUSICAL DOCUMENT**
+The next task is a planning-only investigation of VexFlow and a numbered master development plan. That plan is not written in this file.
 
-Every composition is one self-contained Song. After it has been imported, that Song is stored in IndexedDB, the database built into the browser. The first database now exists. Editing the musical interpretation does not.
+## 1. A Song and a measure are different things
 
-A Song holds four kinds of information together:
+**Song.** The complete musical composition. One Song is one record in IndexedDB. It holds the imported performance, the written interpretation, and the identity of the piece.
 
-1. Metadata about the composition.
-2. The complete information extracted from its original MIDI file.
-3. Musical interpretations and corrections made after that import.
-4. Further musical information added later in the editor.
+**Measure**, also called a bar. An independent graphical unit rendered from part of a Song. It is a small, self-contained piece of sheet music on the page. It is not a second Song, and it is not its own database record.
 
-All of this belongs to the same Song. We do not scatter the original MIDI facts across TypeScript files or hide them in application constants that name one particular piece.
+A Song of 45 measures produces 45 independent graphical measure units. The database still contains one Song.
 
-Once a Song has been imported, normal editing and rendering use the copy stored in IndexedDB. The MIDI file on disk remains the external source. We do not need to parse that file again every time the page is drawn or a correction is saved.
+Those two words stay separate throughout this document. “The Chopin Song” means the whole prelude in IndexedDB. “Bar 0” and “Bar 1” mean two graphical measures drawn from the opening of that Song.
 
-The first repertoire is classical piano. The first example is Chopin's Prelude Op. 28 No. 7 in A major. A MIDI performance and a PDF of the printed score already let us compare a keyboard recording with what a musician reads on the page.
+## 2. One Song is one IndexedDB document
 
-## 2. The three parts of a Song
+**ONE SONG = ONE COMPLETE MUSICAL DOCUMENT IN INDEXEDDB.**
 
-Each Song has three conceptual parts. They live in one document so that import, correction, and display stay attached to the same composition.
+The database is named `midgard-sheet-music`. It has one object store, `songs`. Each record is one complete Song, with three conceptual parts kept side by side:
+
+| Part | Role | Examples |
+|---|---|---|
+| A — Metadata | Which piece this is, and where it came from | Identity, title, composer, original MIDI filename |
+| B — Original MIDI | The parser’s result, preserved as imported | Notes, ticks, tracks, tempo, whatever the parser actually kept |
+| C — Musical interpretation | What we later decide the written music means | Time signature, key, pickup, ticks per written quarter, and later corrections |
+
+All three parts belong to the same record. Measures, notes, tracks, and corrections do not get object stores of their own.
+
+Adding another composition creates another Song in `songs`. That must not require a new TypeScript constant for each title. The program knows how to store a Song. It does not know a private code path for one prelude.
+
+Once a Song has been imported, ordinary reading, editing, and rendering use the IndexedDB copy. The MIDI file on disk remains the external source. The page does not parse that file again every time it is drawn or a setting is saved.
+
+IndexedDB is local to one browser, one site origin, and one browser profile. The origin is the protocol, the hostname, and the port together. Two browsers open on `http://localhost:5173` still keep two separate databases. The store does not follow a person to another computer. It is not a backup. Clearing the browser’s site data removes it.
+
+A Song is a logical document. It is not necessarily a file on disk. A portable export may come later. Its format is not chosen.
+
+## 3. The three parts of a Song
 
 ### Part A — Metadata
 
-This identifies the Song and describes where it came from. Examples:
+Metadata identifies the Song. It is not the music.
 
 - Song ID
 - Title
 - Composer
-- Source MIDI filename
-- Other descriptive information, such as a catalog number or a short note about the edition
+- Original MIDI filename
+- Later, other composition-level description, such as a catalog number or a note about the edition
 
-Metadata is not the music itself. It tells us which piece this document is.
+Song Settings can change the title and the composer. That change does not rename the source MIDI filename. The filename stays the name of the file that was imported.
 
-### Part B — Original MIDI information
+### Part B — Original MIDI
 
-This is the parsed MIDI data, kept as it was imported.
+Part B is the complete structured result of our MIDI parser, kept as it was imported.
 
 A Standard MIDI file is a list of performance events. It records that a key went down, which key it was, how strongly it was struck, and when it was released. That is closer to a recording of actions at a keyboard than to a printed score.
 
-Part B can include:
+The parser in `src/midi/` is a general importer. It returns structured MIDI information. It does not know about IndexedDB, about one Chopin prelude, or about how a score should be drawn. We do not change the parser in order to “fix” one piece. The file on disk stays immutable. Editing a Song does not rewrite it.
+
+What our parser actually preserves, and what Part B therefore holds, includes:
 
 - MIDI format
-- PPQ, the number of ticks per quarter note
-- Tracks and track names
-- Notes, as MIDI note numbers
-- Start ticks and end ticks
-- Velocities and channels
+- Track count
+- PPQ, the number of ticks per MIDI quarter note, or a report that the file uses SMPTE timing instead
+- Track names
+- Paired notes: MIDI note number, start tick, end tick, duration, velocity, release velocity, channel, and track
 - Tempo events
-- Time-signature events, when the file actually contains them
-- Other relevant MIDI events the parser was able to read
+- Time-signature events, when the file contains them
+- Key-signature events, when the file contains them
+- Warnings for channel and meta events the parser counted and did not turn into notes
 
-This part is not overwritten when someone corrects the music. A later decision about barlines or spelling does not erase the imported ticks.
+The Chopin file’s control changes and sequencer-specific meta events are in that last group. The parser records that they were skipped. It does not keep each of those events as its own structured object. Part B cannot later recover bytes the parser never returned.
 
-The TypeScript parser in `src/midi/` is a general-purpose importer. It reads a Standard MIDI file and returns structured MIDI information. It does not know about IndexedDB, about one Chopin prelude, or about how a score should be drawn.
+Part B is not overwritten when someone corrects the notation. A decision about barlines, spelling, or a written quarter note does not erase the imported ticks.
 
-A MIDI file does not always contain everything a printed score needs. Our Chopin file has no time-signature event and no key-signature event. It also does not say whether a written note should be spelled C♯ or D♭. Those decisions are interpretation. They belong in Part C, not in a rewritten copy of Part B.
+### Part C — Musical interpretation
 
-### Part C — Musical interpretation and editing
+Part C is the musical information added or corrected after import. It is editable, and it is saved in the same Song.
 
-This is the musical information added or corrected after import. It is editable, and it is saved with the same Song.
+A MIDI tick is a count inside the file. A written note value, such as a quarter note, is a decision about what that count means on the page. Both accounts remain: what the file said, and what we later decided.
 
-Song Settings, the panel on the parchment page, edits the composition-wide part of this interpretation:
+**Implemented in Song Settings:**
 
-- Time signature, as a numerator and a denominator
-- Key signature, as a tonic and a mode such as A major
-- Pickup, also called an anacrusis: whether the piece has one, and, when it does, its written duration
-- Ticks per written quarter: how many MIDI ticks last as long as one written quarter note
+| Setting | What is stored |
+|---|---|
+| Time signature | Numerator and denominator |
+| Key signature | Tonic and mode, such as A major. The sharp or flat count is shown on screen and follows from that pair. It is not stored a second time. |
+| Pickup, also called an anacrusis | Whether the piece has one |
+| Pickup duration | A written value: sixteenth, eighth, quarter, or half note. Not a tick count. |
+| Ticks per written quarter | A positive number, which may include a decimal. How many MIDI ticks last as long as one written quarter note. |
 
-The pickup duration is a musical value: sixteenth, eighth, quarter, or half note. It is not a MIDI tick count. Ticks per written quarter is a positive number, and it may include a decimal. The page does not fill it in. In this Chopin file the MIDI quarter is 1000 ticks, while a written quarter is about 666.67 ticks, so PPQ is not the written quarter. The screen shows every conventional major and minor key, with its number of sharps or flats. Those counts are not stored separately. They follow from the tonic and the mode.
+The page does not fill these in from the PDF or from PPQ. Until they are saved, the fields stay empty or unselected.
 
-Song Settings is not the Music Editor. The Music Editor will be a later workstation for individual measures and notes. These composition-wide fields are stored now. The following are not:
+**Not stored yet, and intended for Part C later:**
 
-- Measure boundaries
-- Note-by-note corrections
-- Voices and hand assignments beyond the imported track names
-- Rests, ties, and spelling of individual notes
+- Measure boundaries, if we decide to save them rather than only derive them
+- Written durations of individual notes
+- Voices
+- Rests
+- Ties and other relationships between notes
+- Enharmonic spelling
+- Other corrections to how an imported note is understood
 
-A correction changes the Song's interpretation. It does not change the imported MIDI data sitting beside it in Part B. Saving a new title or composer changes metadata only. The source MIDI filename stays as it was imported. Part C can grow. A later save of Song Settings replaces the fields above and leaves any other interpretation properties in place.
+Song Settings writes the fields it owns and leaves any other interpretation properties in place. A future Music Editor will add the note-level fields. Neither one replaces Part B.
 
-**Raw MIDI timing and written interpretation stay distinct inside the same Song.**
+The opening barlines used by the current SVG are calculated when the page is drawn. They are products of the time signature, the pickup duration, and ticks per written quarter. They are not Chopin-specific numbers written into the renderer, and they are not a separate database record.
 
-MIDI timing is a count of ticks. In the Chopin file, 1000 ticks are one MIDI quarter note, so a note from tick 0 to tick 667 is a fact about that performance. The interpretation says what that fact means in the written piece: which bar it belongs to, whether it is a quarter note, whether it is tied, and how it is spelled. After a correction, both accounts remain: what the file said, and what we later decided.
+### PPQ and a written quarter
 
-## 3. IndexedDB and the songs store
+PPQ means ticks per **MIDI** quarter note. It does not mean ticks per **written** quarter note. A file can use a MIDI quarter that is a different length from the quarter note printed in the score.
 
-The browser database is implemented.
+In the Chopin file, PPQ is 1000, so one MIDI quarter is 1000 ticks. The only tempo event makes that MIDI quarter last one second. The printed music is in 3/4, and the investigation of the opening showed a written quarter of about 666.67 MIDI ticks, which is two-thirds of a MIDI quarter. Three written quarters then last 2000 ticks. That is why a full 3/4 bar is not `3 × 1000`.
+
+The setting “ticks per written quarter” records that relationship in Part C. The renderer uses the saved number. It does not assume that PPQ and the written quarter are the same.
+
+## 4. The database as it exists today
 
 | Setting | Value |
 |---|---|
@@ -101,15 +133,13 @@ The browser database is implemented.
 | TypeScript model | `Song` in `src/song/song.ts` |
 | Database module | `src/song/song-database.ts` |
 
-`Song` has `id`, `schemaVersion` (currently 1), `metadata`, `originalMidi`, and `musicalInterpretation`. `originalMidi` is the parser's own `MidiFile` type, not a second copy of those fields. The parser result is plain data, so IndexedDB structured clone can store it. `musicalInterpretation` starts empty. Song Settings can then store a time signature, a key signature, a pickup, and ticks per written quarter on that same object. Measure boundaries are calculated from those settings when the page is drawn. They are not stored as Chopin-specific tick numbers.
+`Song` has `id`, `schemaVersion` (currently 1), `metadata`, `originalMidi`, and `musicalInterpretation`. `originalMidi` is the parser’s own `MidiFile` type. The parser result is plain data, so IndexedDB structured clone can store it.
 
-The page asks IndexedDB for `chopin-prelude-op-28-no-7`. If that record is missing, `src/song/import-chopin-song.ts` parses `chopin-prelude-op-28-no-7-in-a-major.mid`, builds the Song, and inserts it. If the record is already there, the page loads it and does not write again. A reload therefore does not overwrite or duplicate the Song. The MIDI file is used only for that first insert.
+The page asks IndexedDB for `chopin-prelude-op-28-no-7`. If that record is missing, `src/song/import-chopin-song.ts` parses `midi-files/chopin-prelude-op-28-no-7-in-a-major.mid`, builds the Song, and inserts it. If the record is already there, the page loads it and does not write again. A reload does not overwrite or duplicate the Song. The MIDI file is used only for that first insert.
 
-What the page shows is then read from the stored record: title, composer, note count, track count, and the notes inside `originalMidi`. Song Settings fills its fields from that same record. A time signature or key that has not been saved is left unselected. The page does not invent 3/4 or A major from the Chopin PDF. The tick window `[0, 2000)` is only a temporary screen filter in `src/main.ts`. It is not saved as a measure boundary.
+Song Settings updates the existing id with `replaceSong`. The write keeps the id, the schema version, the source filename, and the original MIDI. It does not insert a second Song.
 
-The same store can later hold other compositions without a new database design:
-
-Three independent records, all using the same general structure, might be:
+The same store can hold other compositions with the same shape:
 
 | Record | Composition |
 |---|---|
@@ -117,63 +147,57 @@ Three independent records, all using the same general structure, might be:
 | Song 2 | Chopin — Prelude Op. 28 No. 4 |
 | Song 3 | Beethoven — Für Elise |
 
-Importing another composition creates another Song record. Adding that piece should not require a change to the application source code. The program already knows how to store a Song. It does not need a new TypeScript constant for each title.
+There is still no general file-picker import and no portable Song file.
 
-A Song is a logical document: one structured object in IndexedDB. It is not necessarily a file on disk. Later we may add a portable export and import format so a Song can be copied, archived, and opened again on another machine. That file format is not chosen yet.
+### How a Song moves
 
-IndexedDB storage is local to one browser, one site origin, and one browser profile. It does not follow a person to another computer by itself. It is not a reliable backup. Clearing the browser's site data can remove it.
+**Import.** The parser reads a Standard MIDI file and returns structured information. It does not invent barlines or spelling. Today this runs for the first Chopin file, and only when its Song is missing. A general file picker is planned.
 
-The store is one record per Song, with the import and the interpretation kept side by side. Song Settings writes into that record with `replaceSong`. The write replaces the existing id and does not insert another Song. There is still no general file-picker import, no Music Editor, and no portable Song file.
+**Create.** The application builds one Song. Part A receives the title, composer, and source filename. Part B receives the parsed MIDI. Part C starts empty. The Song is inserted into `songs`. This is implemented.
 
-## 4. How a Song moves through the application
+**Read.** The page loads that record and uses it for the storage status, Song Settings, the text note panel, and the SVG experiment. A reload takes this path. This is implemented.
 
-The intended workflow has five steps.
+**Interpret.** Song Settings can change the composition-wide fields and save them. The Music Editor, for individual notes, is not implemented. Measure boundaries are derived for drawing. They are not stored as a list of ticks.
 
-**Step 1 — Import MIDI.** The parser reads a Standard MIDI file and returns structured MIDI information. Nothing about barlines or spelling is invented inside the parser. Today this runs only for the first Chopin file, and only when its Song is missing. A general file picker is still planned.
+**Render.** The text panel reads stored notes inside a temporary tick window. The SVG experiment reads the same Song and draws Bar 0 and Bar 1 when the required settings exist. It does not open the MIDI file, and it does not store the picture.
 
-**Step 2 — Create the Song.** The application builds one Song. Part A receives the title, composer, and source filename. Part B receives the parsed MIDI information. Part C is an empty object. The Song is inserted into `songs`. This insert is implemented.
+## 5. Song Settings and the Music Editor
 
-**Step 3 — Read the Song.** The page loads that record back from IndexedDB and uses it for the note panel and the storage status. A reload takes this path and does not parse the file again. This read is implemented.
+These are two interfaces. They edit the same Song. They do different jobs.
 
-**Step 4 — Interpret and edit.** Song Settings is implemented. The user can set the title, composer, time signature, key signature, pickup, and ticks per written quarter, then press Save Changes. The page validates the form, writes metadata and Part C, and reads the Song back. Reload restores those choices. The Music Editor, for individual notes, is not implemented. Tick boundaries are not stored.
+### Song Settings
 
-**Step 5 — Render.** The text panel reads stored notes inside a temporary tick window. The first SVG experiment reads the same Song and draws Bar 0 and Bar 1 when the musical settings are present. It does not open the MIDI file, and it does not store the picture.
+Song Settings prepares a newly imported composition, and it stays available later. It is implemented.
 
-## 5. Three layers, with the Song in the middle
+- Song title
+- Composer
+- Time signature
+- Key signature
+- Pickup, yes or no
+- Pickup duration, when the pickup is yes
+- Ticks per written quarter
 
-The application still has three layers. The Song is how Layer 2 holds a whole composition.
+Save Changes validates the form, writes Part A and Part C, reads the Song back, and redraws the page. No restart is required. A reload restores the saved choices. The original MIDI is checked and left unchanged.
 
-```text
-Layer 1   MIDI import          read a file, return structured events
-Layer 2   Song and IndexedDB   one document: import plus interpretation
-Layer 3   Notation systems     3A traditional, 3B midGard
-```
+### Music Editor
 
-### Layer 1 — MIDI import
+The Music Editor is a future workstation for inspecting and editing individual measures and notes. It is not implemented.
 
-This is the existing parser. Its only responsibility is to read a Standard MIDI file and return structured MIDI information. It stays independent of the database, of musical corrections, and of graphical notation. We do not change the parser in order to "fix" one piece.
+It will be able to work on:
 
-The MIDI file itself remains immutable external material. Editing a Song does not rewrite that file.
+- Written note durations
+- Rests
+- Voices
+- Ties
+- Note corrections
+- Enharmonic spelling
+- Other musical relationships
 
-### Layer 2 — Song and IndexedDB
+Those edits belong in Part C. They must not overwrite Part B.
 
-This is the central musical layer and the authoritative store of musical information the application keeps.
+## 6. Store musical meaning, generate SVG
 
-Each Song contains both the preserved MIDI import and the editable interpretation. IndexedDB provides the persistence. After import, this layer is what editing and rendering consult.
-
-### Layer 3 — Notation systems
-
-Two independent renderers read musical information from Layer 2. Neither of them defines the Song.
-
-**3A — Traditional Sheet Music** is conventional notation: staves, clefs, noteheads, stems, beams, rests, barlines, and the other familiar symbols. A pianist who knows ordinary notation should be able to read a 3A rendering. It will eventually be drawn with SVG, a way to describe precise shapes in the browser.
-
-**3B — midGard Sheet Music** will be a different notation system, designed later. It is not a small restyling of 3A. The same composition might look so different that an experienced pianist would not immediately recognize it. 3B may also use SVG, but its drawing rules will be its own. It is not required to use five-line staves.
-
-The two systems are like one poem written once in Greek and once in Latin. The meaning can be the same while the letters and the visual layout are not. Both writings read the same Song. Neither renderer should dictate that Song's fundamental structure.
-
-The rules of midGard notation are not defined yet. This document does not invent them.
-
-## 6. Musical information versus graphics
+**STORE MUSICAL MEANING, GENERATE SVG.**
 
 The same note can be described in two ways.
 
@@ -189,178 +213,402 @@ Musical information, stored in the Song, answers musical questions:
 Visual information answers drawing questions:
 
 - Which SVG elements are on the page?
-- Where are they, in pixels or other drawing coordinates?
-- Which colors and fonts are used?
-- Where would staff lines sit, if this renderer uses staves?
-- What shape is a notehead, which way does a stem go, and how far apart are the symbols?
+- Where are they, in the coordinate system of that measure?
+- Which staff line a notehead sits on?
+- What shape is a notehead, which way a stem goes, and how far apart the symbols are?
 
-**STORE MUSICAL INFORMATION, NOT SVG MARKUP.**
+IndexedDB stores MIDI information, musical interpretation, and editable notation decisions. It does not store SVG markup, notehead coordinates, staff-line positions, pixel dimensions, or generated paths. The renderer derives those from the Song and from its own engraving rules.
 
-The Song stores musical meaning. It does not store SVG elements, pixel positions, staff coordinates, or graphical paths as its authoritative musical information. If the authoritative record were a picture of staves, the midGard renderer would have to recover the music by reading someone else's drawing. Both notations would be trapped inside traditional staff geometry.
+If the authoritative record were a picture of staves, the midGard renderer would have to recover the music by reading someone else’s drawing. Both notations would be trapped inside traditional staff geometry.
 
-Each notation system transforms the Song into its own picture. 3A and 3B may follow entirely different graphical rules. Staff positions, stem directions, and pixel spacing stay inside the renderer that needs them. They do not enter the shared Song as the definition of the note.
+Some decisions sit close to notation and are still musical meaning. Enharmonic spelling is one. C♯ and D♭ can be the same piano key, and the same MIDI note number 61, while remaining different names in a key. Storing “this note is spelled C♯” in Part C records a musical decision. It does not tell the traditional renderer where to put a notehead, and it does not tell the midGard renderer to draw a notehead at all.
 
-Some decisions sit close to notation and are still musical meaning. Enharmonic spelling is one. C♯ and D♭ can be the same piano key, and the same MIDI note number 61, while remaining different names in a key. Storing "this note is spelled C♯" in Part C records a musical decision. It does not tell 3A where to put a notehead, and it does not tell 3B to draw a notehead at all.
+## 7. One measure, one div, one SVG
 
-## 7. The Chopin prelude as our first example
+**ONE MEASURE = ONE HTML DIV = ONE COMPLETE SVG.**
 
-The first MIDI file is Chopin's Prelude Op. 28 No. 7 in A major. These facts are in the file:
+This is a fixed requirement for traditional piano notation.
+
+```html
+<div class="measure">
+  <svg>
+    <!-- Both piano staves and all notation for this measure -->
+  </svg>
+</div>
+```
+
+For piano, that one SVG contains the treble staff and the bass staff, and every symbol that belongs to the measure. A label such as “Bar 0” may sit in HTML outside the SVG. The measure div itself contains exactly one SVG.
+
+If a Song contains 45 measures, the renderer creates 45 of these divs.
+
+The whole composition is not one enormous SVG. The right hand and the left hand are not two SVGs. A measure does not contain several SVGs for several kinds of symbol.
+
+This is a rule for the picture. It is not a rule for the database. The Song remains one IndexedDB record, however many measure divs the page builds.
+
+A note is selected for a measure when its onset satisfies `startTick <= note.startTick < endTick`, after the span’s edges are rounded to whole ticks. The stored end of the note stays intact. The current experiment does not draw ties, so a note that rings into the next measure appears in the measure where it begins.
+
+## 8. Musical graphics are SVG
+
+The traditional notation engine uses **SVG exclusively** for musical graphics.
+
+Allowed inside a measure SVG:
+
+- Lines
+- Paths
+- Ellipses
+- Polygons
+- Text, where a musical symbol or label is genuinely text
+- Groups and transformations
+- Vector music glyphs
+- Definitions and reusable symbols
+
+HTML and CSS belong to the application around those pictures. They arrange the page, the parchment, Song Settings, and the measure divs. They do not stand in for noteheads, stems, or staff lines.
+
+Musical rendering does not use HTML Canvas, rasterized musical symbols, PNG or JPEG noteheads, HTML elements positioned to imitate symbols, or any renderer that requires Canvas. The finished traditional engine does not depend on VexFlow’s Canvas renderer.
+
+The first experiment already follows the SVG rule in a small way: staff lines, ledger lines, and filled elliptical noteheads are SVG. Clefs, stems, and the rest are not drawn yet.
+
+### Glyphs, fonts, and export
+
+Professional music fonts, including SMuFL fonts, are a possible source of clefs, noteheads, rests, and other symbols. How they enter the SVG is still open. Two representations have to stay distinct:
+
+- **SVG text** that asks the browser to draw a glyph from a music font. The SVG is compact. A later viewer needs that font, or an embedded copy of it, or the glyph will not look the same.
+- **SVG paths** that contain the outline of the glyph. The picture carries its own shapes. A single measure can be exported as a self-contained SVG without asking another program to supply the font.
+
+Either choice can still be SVG-only on the page. They differ when a measure is saved or copied as a file. The choice is an open question for the next investigation. Any font we use has to be checked for its own license.
+
+## 9. Our own engraving engine
+
+We want traditional engraving of a quality comparable to VexFlow and to the printed score. We are not adopting VexFlow’s architecture as the architecture of this application.
+
+The engine is designed around:
+
+- The IndexedDB Song
+- Independent measures
+- One SVG per measure
+- Our own rendering modules
+- Our own div layout manager
+- Future musical editing
+
+It should stay modular enough to read. A final directory tree is not fixed here. That waits until the VexFlow reference has been studied.
+
+These are responsibilities the engine will need. They are capabilities, not a claim that the code exists:
+
+| Area | What it will eventually decide |
+|---|---|
+| Staff geometry | Where the five lines of each staff sit inside the measure SVG |
+| Clefs, key signatures, time signatures | The symbols at the start of a staff, from Part C and from engraving rules |
+| Noteheads and ledger lines | Pitch mapped onto staff positions |
+| Stems, flags, beams | How a written duration is drawn, once Part C knows that duration |
+| Rests, accidentals, augmentation dots | Symbols for silence, spelling, and dotted values |
+| Ties and slurs | Connections between notes, including connections that leave the measure |
+| Dynamics, articulations, fingering | Marks that are musical data and also typography |
+| Rhythmic spacing | How much horizontal room each written value receives |
+| Collision avoidance | How nearby symbols move so they remain readable |
+| Musical typography | The consistent look of the whole engraving |
+
+The current experiment covers staff lines, simple elliptical noteheads, and ledger lines for Bar 0 and Bar 1. Everything else in the table is ahead of us.
+
+## 10. VexFlow is a reference, not the runtime
+
+A local copy of the VexFlow source is kept at `reference/vexflow-master/`. It is research material. It is not imported by the application, and it is not part of the production build.
+
+We will read it gradually to learn how professional engraving works:
+
+- Engraving algorithms
+- Staff geometry
+- Music fonts and SMuFL
+- Glyph placement
+- Note positioning
+- Stems and beams
+- Rhythmic spacing
+- Voices and tick contexts
+- Collision avoidance
+- How a renderer is divided into parts
+
+An earlier look at the upstream project found an MIT license on the code and separate licenses on the music fonts. Before any code or font is reused, we inspect the license in this local copy and keep the notices and attribution it requires. A font is checked on its own terms. Reuse is allowed only where those licenses allow it.
+
+VexFlow’s internal architecture is a source of ideas. It is not assumed to fit this application. Our Song model and our independent-measure SVG rule take priority. Where VexFlow draws a whole system through one context, including a Canvas context, we still draw one SVG per measure and we do not take the Canvas path.
+
+## 11. Engraving and page layout are separate
+
+Two responsibilities stay apart.
+
+### The SVG engraving engine
+
+The engraving engine receives the musical information for one measure. It produces exactly one SVG containing the complete notation for that measure.
+
+It does not decide where that measure sits on the page, which row it belongs to, or how large the margin around the page is.
+
+### The div layout manager
+
+The layout manager receives measure divs that have already been rendered. It controls:
+
+- Horizontal arrangement
+- Spacing between measures
+- Rows and systems
+- Alignment
+- Margins
+- Page breaks
+- Pagination
+- Responsive behavior
+
+The layout manager does not draw notes.
+
+A measure can be drawn again without drawing every other measure again. Some edits still force more work. A change to rhythmic spacing, a tie into the next bar, or the width of a system can require the neighbors, or the whole system, to be arranged again. The split between the two responsibilities makes that choice explicit. It does not pretend that every edit is local.
+
+The page today places Bar 0 and Bar 1 in a centered flex row, with Bar 0 narrower because its musical span is shorter. That row is a small layout for the experiment. It is not yet the layout manager described above.
+
+## 12. Notation that crosses from one SVG into the next
+
+Independent SVGs make some ordinary notation a design problem. The problems are real, and they are solvable. They have to be designed on purpose.
+
+Examples:
+
+- A tie that crosses a barline
+- A slur that covers several measures
+- A hairpin that grows across a system
+- The two staves of a piano system staying aligned from measure to measure
+- Rhythmic spacing that still looks even across a row of separate SVGs
+- A system break, where a musical line continues on the next row
+- A clef or key signature that changes at a barline
+
+A possible later design is a shared planning stage before any SVG is built. That stage would calculate geometry for a system, then decide which part of a crossing symbol belongs to which measure. A tie across a barline could be two coordinated SVG curves, one in each measure, that meet at the shared edge. The musical fact, “these two written notes are tied,” would still live in Part C. The curves would be generated.
+
+This planning stage is not implemented. The current experiment does not draw ties, slurs, or hairpins.
+
+The same musical situation already exists in the data, apart from the picture. A sounding note can start in one measure and still be held in the next. In print that is often a tie. In MIDI it may be one long note, or a note-off followed by a new note-on. Part B keeps the imported interval. Part C will record which written meaning we chose. The renderer will then draw that meaning, including a tie that has to leave one SVG and enter the next.
+
+## 13. Two notation systems read one Song
+
+The application has three layers. The Song is the middle one.
+
+```text
+Layer 1   MIDI import          read a file, return structured events
+Layer 2   Song and IndexedDB   one document: import plus interpretation
+Layer 3   Notation systems     3A traditional, 3B midGard
+```
+
+Layer 1 is the parser. Layer 2 is the authoritative musical store. Layer 3 only reads Layer 2. Neither notation system defines the Song.
+
+### 3A — Traditional Sheet Music
+
+3A is conventional Western notation: staves, clefs, noteheads, stems, beams, rests, barlines, and the other familiar symbols. A pianist who knows ordinary notation should be able to read it.
+
+3A uses our own SVG engraving engine, with one SVG per measure. The first experiment has started that engine. It has not finished it.
+
+### 3B — midGard Sheet Music
+
+3B is a future notation with its own graphical rules. It is not a restyling of 3A. The same composition might look so different that an experienced pianist would not immediately recognize it. 3B reads the same Song and the same musical interpretation. It must not depend on the traditional engraving engine. It is not required to use five-line staves. Its rules are not defined in this document.
+
+The two systems are like one poem written once in Greek and once in Latin. The meaning can be the same while the letters and the layout are not. They share musical meaning. They do not have to share graphics or layout algorithms.
+
+## 14. The Chopin prelude, our first Song
+
+The first repertoire is classical piano. The first Song is Frédéric Chopin’s Prelude Op. 28 No. 7 in A major. A MIDI performance and a PDF of the printed score let us compare a keyboard recording with what a musician reads.
+
+### What the MIDI file contains
+
+These facts are in the file, and after the first visit they are Part B of the stored Song:
 
 | Fact | Value |
 |---|---|
 | MIDI format | 1 |
 | Tracks | 3 |
-| Resolution | 1000 ticks per quarter note (PPQ) |
+| PPQ | 1000 ticks per MIDI quarter note |
+| Tempo | One event, at tick 0: 1,000,000 microseconds per MIDI quarter |
 | Paired notes | 176 |
 | Time-signature event | none |
-| Track 2 | Main droite, the right hand |
-| Track 3 | Main gauche, the left hand |
+| Key-signature event | none |
+| Track 1 | `chopin-prelude-7`, the conductor track, no notes |
+| Track 2 | `Main droite`, the right hand |
+| Track 3 | `Main gauche`, the left hand |
 
-Track 1 carries the file name and the tempo. It has no notes. After the first visit, this whole parse is Part B of the stored Song, not a table kept in the page.
+Pitch names in our displays use the scientific convention in which MIDI note 60 is C4. The file stores note numbers. Sharps in the tables below are an A-major reading of those numbers, matching the printed key. The file itself does not spell them.
 
-A MIDI tick is a unit of time inside the file. A measure, also called a bar, is a grouping in written music. The file does not automatically know where the bars are.
+### What the printed PDF shows
 
-The note panel still filters the stored notes to those that start at tick 0 up to, but not including, tick 2000. That window is a temporary development view, not a record in the Song. It was originally a supplied guess: three beats of about 667 ticks, because 667 + 666 + 667 = 2000. Nine notes begin there. Each has velocity 70. Pitch names use the scientific convention in which MIDI note 60 is C4. The sharps are an A-major spelling. The file stores only the note numbers.
+The PDF is the score, not the MIDI file. Its opening shows:
+
+- A major, three sharps
+- 3/4 time
+- A quarter-note pickup: E in the treble, a rest in the bass
+- Then a full bar whose melody begins with a dotted eighth and a sixteenth, over a quarter-note bass note
+
+That printed meter and that printed pickup are interpretation. They belong in Part C after someone saves them. The application does not insert them by itself.
+
+### Written quarters and the opening bars
+
+The timing investigation compared the PDF rhythms with the parsed ticks. With a written quarter of about 666.67 MIDI ticks, a quarter-note pickup and a 3/4 bar fall on these spans. The edges below are the rounded tick labels. The calculation itself keeps the fractional ticks and rounds only when it selects notes or prints a label.
+
+| Measure | Start tick | End tick |
+|---|---:|---:|
+| Bar 0 — pickup | 0 | 667 |
+| Bar 1 | 667 | 2667 |
+| Bar 2 | 2667 | 4667 |
+
+These spans are what the saved settings produce when the time signature is 3/4, the pickup is a quarter note, and ticks per written quarter is 666.67. They are not constants inside the renderer. Bar 2 follows the same rule and is not drawn yet.
+
+The same spacing continues through most of the prelude. Near the end, the ticks leave that grid. A single calibration does not by itself describe those final bars. That remains an open musical question.
+
+### The old nine-note window
+
+The text panel still shows notes that start at tick 0 up to, but not including, tick 2000. That window is a temporary development view in `src/main.ts`. It is not a saved measure. It mixes the pickup with part of Bar 1, and it stops before the chord at tick 2000, which belongs to Bar 1.
 
 | MIDI | Pitch | Start | End | Track |
 |---|---|---:|---:|---:|
 | 64 | E4 | 0 | 667 | 2 |
-| 73 | C#5 | 667 | 1167 | 2 |
+| 73 | C♯5 | 667 | 1167 | 2 |
 | 40 | E2 | 667 | 1333 | 3 |
 | 74 | D5 | 1167 | 1333 | 2 |
 | 62 | D4 | 1333 | 1999 | 2 |
-| 68 | G#4 | 1333 | 1999 | 2 |
+| 68 | G♯4 | 1333 | 1999 | 2 |
 | 71 | B4 | 1333 | 1999 | 2 |
 | 52 | E3 | 1333 | 1999 | 3 |
 | 64 | E4 | 1333 | 1999 | 3 |
 
-Notes that start on the same tick sound together. At tick 1333 the right hand starts D4, G♯4, and B4 together, and the left hand starts E3 and E4 together. The page writes those groups as `[D4 G#4 B4]` and `[E3 E4]`. At tick 667, C♯5 and E2 also start together, but they belong to different hands. They are simultaneous. They are not one single-hand chord.
+Notes that start on the same tick sound together. At tick 1333 the right hand starts D4, G♯4, and B4, and the left hand starts E3 and E4. The text panel writes those groups as `[D4 G#4 B4]` and `[E3 E4]`. At tick 667, C♯5 and E2 start together in different hands. They are simultaneous. They are not one single-hand chord. Each of these notes has velocity 70.
 
-Comparing that first window with the original PDF showed a pickup measure, an anacrusis: a short group of notes before the first full bar. In the current reading, the opening E4 is that pickup, not beat 1 of a full bar. The provisional boundaries are:
+The parser was right to report E4 from tick 0 to tick 667. The early mistake was to call the window that starts at tick 0 the first full measure. The pickup is an interpretation in Part C. The imported ticks stay in Part B.
 
-| Bar | Start tick | End tick | Pickup |
-|---|---:|---:|---|
-| 0 | 0 | 667 | Yes |
-| 1 | 667 | 2667 | No |
-| 2 | 2667 | 4667 | No |
+## 15. The first SVG experiment
 
-These boundaries still have to be checked against the PDF. Later timestamps in the file also leave a perfectly even grid, because the performance timing was written into the ticks. A single bar length may not describe the whole prelude without further musical judgment.
+Under the heading **Traditional Sheet Music — SVG Experiment**, the page draws two measures when Song Settings has a time signature, a pickup duration, and ticks per written quarter. If any of those is missing, the section says so. It does not silently use PPQ.
 
-The architectural lesson is the important part. The MIDI parser is correct. It reported the events in the file, including E4 from tick 0 to tick 667. The mistake was the interpretation that tick 0 began the first full measure. That correction belongs in Part C. It is not stored yet. The parser stays unchanged, and reloading the page does not rewrite Part B.
+With the Chopin calibration saved, the pictures are:
 
-A note can also cross a barline: it starts in one measure and is still sounding in the next. In print that is often a tie, two written notes that sound as one held note. In MIDI it may be one long note, or a note-off followed one tick later by a new note-on. The imported interval and the written tie are different facts. Part B keeps the interval. Part C records which written meaning we chose.
+**Bar 0, the pickup.** Both staves. One MIDI note, E4, on the treble staff. The bass staff has no note from the file.
 
-The nine-note table remains a raw slice of the import. It mixes the pickup with part of the following music. It is not yet a corrected transcription of the printed score.
+**Bar 1, the first complete measure.** Both staves. Thirteen MIDI note events: C♯5 at 667, D5 at 1167, the right-hand chord D4 G♯4 B4 at 1333 and again at 2000, the left-hand E2 at 667, and the left-hand E3 E4 at 1333 and again at 2000.
 
-## 8. One measure per SVG container
+The measures read `originalMidi` and `musicalInterpretation` from the stored Song. They sit side by side, Bar 0 on the left and narrower, Bar 1 on the right. Each has its own HTML container and exactly one SVG. The SVG uses staff lines, ledger lines, and filled elliptical noteheads. Right-hand pitches use treble positions. Left-hand pitches use bass positions. The hand comes from the stored track name. On a narrow screen the two measures stack.
 
-The first traditional picture is an experiment under the heading **Traditional Sheet Music — SVG Experiment**. It draws two measures, Bar 0 on the left and Bar 1 on the right.
+The experiment does not yet draw:
 
-- Each measure is its own `div` with the class `measure`.
-- That div contains exactly one `svg`.
-- The label “Bar 0” or “Bar 1” sits outside the SVG.
-- Both piano staves, and the noteheads of both hands, are inside that one SVG.
-- There is not one SVG for the whole line, and not one SVG per hand.
+- Clef symbols
+- Noteheads from a music font
+- Stems, flags, or beams
+- Rests
+- Accidentals
+- Ties
+- Professional horizontal spacing
 
-A note is drawn in a measure when its onset satisfies `startTick <= note.startTick < endTick`, after the span’s edges are rounded to whole ticks. The stored end of the note is left alone. Ties are not drawn yet, so a note that rings across a barline still appears only in the measure where it begins.
+None of those should be described as present.
 
-The spans themselves are not saved. Bar 0 runs from tick 0 for the saved pickup duration. Bar 1 begins where the pickup ends and lasts for one full bar of the saved time signature. A written quarter lasts for the saved “ticks per written quarter.” Until that number, the time signature, and a pickup duration have been saved, the section explains what is missing instead of treating PPQ as a written quarter.
+## 16. The first professional target
 
-The picture is noteheads, staff lines, and ledger lines. It does not yet draw clefs, stems, flags, beams, rests, ties, accidentals, articulations, dynamics, or fingering. Right-hand pitches use treble-staff positions and left-hand pitches use bass-staff positions. The hand comes from the stored track name.
+Before engraving the whole prelude, Bar 0 and Bar 1 are the complete two-measure example. The goal is for those two measures to look like professionally engraved piano notation, comparable to VexFlow and to the printed PDF.
 
-This layout is a rendering decision. It is not a rule for how the Song is stored. The Song remains one IndexedDB record. The SVG is generated when the page is drawn and is not written into the database.
+That goal does not delete or shorten the Song. All 176 notes remain in IndexedDB. The renderer selects the first two measures for this experiment. The engine stays general: another Song, or a later measure of this one, must be drawable without a new piece of Chopin-specific code.
 
-3B, the midGard picture, does not exist yet. It would read the same Song.
+The numbered steps that get from the current ellipses to that engraving will be proposed in the next investigation. They are not listed here.
 
-## 9. What works today, and what does not
+## 17. What works today, and what does not
 
-Already implemented:
+Implemented:
 
 - A Vite application in vanilla TypeScript, without a user-interface framework
 - A centered parchment page, with a deep blue background on both sides
 - The Standard MIDI parser in `src/midi/`
-- Extraction of MIDI notes, including the nine notes that start in ticks 0–2000
-- A terminal command that prints that slice
-- The same slice on the parchment page, grouped into right hand and left hand by the track names stored in the Song
-- Chords shown where notes share a start tick
-- The original Chopin PDF, embedded below those results for comparison
-- IndexedDB database `midgard-sheet-music`, version 1, with one `songs` object store
-- Import of the Chopin prelude as Song `chopin-prelude-op-28-no-7` when that id is absent
-- Loading that same record on later visits without parsing or overwriting it
-- A storage status panel whose title, id, note count, and track count come from the stored Song
-- Song Settings: title, composer, time signature, key signature, pickup duration, and ticks per written quarter, saved into the existing Song
-- An experimental SVG of Bar 0 and Bar 1, drawn from those saved settings and from `originalMidi`, with one SVG per measure
-- A local copy of the VexFlow source, kept as reference material and not used as our renderer
+- A terminal command that prints the notes starting in ticks 0–2000
+- That same temporary slice on the parchment page, grouped by the stored track names
+- The original Chopin PDF, shown below the experiment for comparison
+- IndexedDB database `midgard-sheet-music`, version 1, with one `songs` store
+- Import of the Chopin prelude as Song `chopin-prelude-op-28-no-7` when that id is absent, and loading it on later visits without parsing or overwriting it
+- A storage status panel whose facts come from the stored Song
+- Song Settings, saved into that Song
+- An experimental SVG of Bar 0 and Bar 1, one SVG per measure, drawn from the stored Song
+- A local copy of the VexFlow source, kept for study and not used as the renderer
 
-Not yet implemented:
+Not implemented:
 
 - A general MIDI file picker
-- The Music Editor for individual notes
-- Stored measure boundaries, ties, and other note-level corrections
-- Clefs, stems, beams, rests, and accidentals in the SVG
-- The rest of the traditional SVG renderer, 3A
-- The midGard renderer, 3B
+- The Music Editor
+- Stored measure boundaries, ties, voices, rests, and spelling
+- Clefs, music-font glyphs, stems, beams, rests, accidentals, and professional spacing
+- The div layout manager as a separate stage from engraving
+- A shared plan for ties, slurs, and other symbols that cross measure SVGs
+- The rest of traditional notation, 3A
+- midGard notation, 3B
+- Playback and a portable Song file
 
-Playback and a general editor are also still ahead of us. None of the items in the second list should be described as present in the application.
+## 18. Architectural principles
 
-## 10. Architectural principles
+1. One Song is one complete musical document in IndexedDB.
+2. A measure is a graphical unit rendered from part of a Song, not a separate database record.
+3. Every Song contains its own imported MIDI information, and that information is preserved unchanged.
+4. Every Song contains its own editable musical interpretation, saved beside the import.
+5. Adding another Song must not require song-specific application code.
+6. After import, editing and rendering read the Song from IndexedDB.
+7. Musical meaning is stored. SVG is generated.
+8. One measure is one HTML div and one complete SVG, with both piano staves inside it.
+9. Musical graphics are SVG. The page around them may be HTML and CSS.
+10. The engraving engine draws one measure. The layout manager places measure divs.
+11. Traditional notation and midGard notation read the same Song and do not define it.
+12. VexFlow is a reference. Our Song and our measure SVG come first.
+13. MIDI parsing, musical editing, storage, engraving, and layout remain separate responsibilities.
+14. The system grows by small steps that can be seen, compared with the score, and kept.
 
-1. One Song is one complete musical document.
-2. Every Song contains its own imported MIDI information.
-3. Every Song contains its own editable musical interpretation.
-4. Imported MIDI information is preserved unchanged.
-5. Musical corrections are saved separately within the same Song.
-6. IndexedDB is the persistent storage for Songs.
-7. After import, normal editing and rendering read the Song from IndexedDB.
-8. Adding another Song must not require modifying application source code.
-9. Musical information must remain independent of SVG.
-10. Traditional notation and midGard notation read the same Song.
-11. MIDI parsing, musical editing, storage, and rendering remain separate responsibilities.
-12. The system grows by small, verifiable steps.
+We compare an interpretation with the original PDF before treating it as settled. We do not add a dependency or an abstraction until it has a clear job.
 
-Two further habits follow from these rules. We compare an interpretation with the original PDF before treating it as settled. We do not add a dependency or an abstraction until it has a clear job.
+## 19. The next investigation
 
-## 11. The development sequence from here
+The next task is planning only. It will inspect:
 
-The Song is in place, and the first SVG measures are drawn from it. The planned order is:
+- The current application architecture
+- The existing SVG renderer
+- The IndexedDB Song model
+- The VexFlow reference source
+- Relevant music-font resources
+- The original Chopin PDF
 
-1. Document the Song architecture. Done in this file, and revised as the store took shape.
-2. Define a minimal TypeScript Song interface, without freezing every future field. Done. Part C now has the Song Settings fields, and it can still hold later properties beside them.
-3. Implement the IndexedDB `songs` object store. Done.
-4. Import the existing Chopin MIDI file and save it as one Song. Done for the first visit only.
-5. Verify that the parsed MIDI information is still there after the page is closed and opened again. Done for this first Song: a reload reads the record and does not replace it.
-6. Display musical information by reading the Song from IndexedDB. Done for the current text panel. The panel still uses a temporary tick window, which is not part of the stored interpretation.
-7. Introduce editable interpretation inside the Song, stored beside the import. Started: Song Settings saves the composition-wide fields. Measure and note editing are still ahead.
-8. Correct the pickup and the measure boundaries through that stored interpretation, and check them against the PDF. The pickup duration and the written-quarter calibration can now be saved. The opening spans are calculated from them. Later barlines are not saved, and the ending of the prelude is not drawn.
-9. Develop the Music Editor for measures and notes, not for SVG elements.
-10. Implement traditional SVG notation, renderer 3A. Started: two measures, staff lines, ledger lines, and noteheads.
-11. Later, define the midGard notation rules, then implement renderer 3B.
+It will then propose a detailed, numbered development plan. This README does not contain that plan.
 
-Steps 9 and 11 are still plans. The SVG experiment is only the opening pair of measures.
+Each implementation step in the future plan should be small enough to:
 
-## 12. Open questions
+1. Implement it.
+2. Inspect the SVG visually.
+3. Compare it with the printed PDF.
+4. Correct any problems.
+5. Commit the completed step.
+6. Proceed to the next step.
 
-These questions are deliberately unanswered.
+The first target of that work is the professional engraving of Bar 0 and Bar 1, with the rest of the Song left intact in IndexedDB.
+
+## 20. Open questions
+
+These questions are deliberately unanswered. The master-plan investigation should take them up. It does not have to close them all before the first engraving step.
 
 Music and interpretation:
 
-- How should MIDI timing be converted into symbolic rhythm, such as quarter notes and eighth notes, especially where the performance does not land on a perfect grid?
-- Ticks per written quarter now aligns a written note value with MIDI ticks for the opening measures. How should later bars be handled where the performance leaves that grid?
+- How should MIDI timing become written durations where the performance leaves the tick grid, especially in the final bars of this prelude?
 - How should a note that crosses a barline be stored: as one sounding event, as two tied written notes, or as both?
 - How should musical voices be represented when one hand plays more than one line?
 - How should rests be inferred when the MIDI file simply has silence?
-- Where does enharmonic spelling live, and which other decisions belong in the shared Song rather than only in 3A or only in 3B?
+- Which decisions belong in the shared Song, and which belong only to 3A or only to 3B?
 - How should manual corrections survive if the same MIDI file is imported again?
-- What will the midGard notation system look like?
+- What will midGard notation look like?
+
+Engraving and layout:
+
+- How should professional music glyphs be integrated?
+- Should those glyphs be SVG paths, or SVG text that uses a SMuFL font?
+- How can each measure SVG be exported on its own?
+- How should ties and slurs cross the boundary between two SVGs?
+- How should the div layout manager align staves from measure to measure?
+- How should measure widths be calculated?
+- How should rhythmic spacing work inside a measure and across a system?
+- How should the renderer draw multiple voices?
+- How can one edited measure be rendered again without redrawing the whole Song?
+- How should the Music Editor talk to the renderer?
 
 Storage and the life of a Song:
 
 - How should Song IDs be generated?
-- How should we version the Song schema as Part C grows?
+- How should the Song schema be versioned as Part C grows, and how should migrations update Songs saved by an older version?
 - How do we preserve imported events that the parser does not yet fully interpret, so a later parser can still see them?
 - How should a very large composition be stored and loaded?
 - How should an edit be validated before it is saved?
-- How should future database migrations update Songs that were saved by an older version?
-- What should a portable Song export and import file contain?
+- What should a portable Song export contain?
 
-This README is a living reference. We will extend it with music-theory explanations, examples from the Chopin prelude, architectural decisions, and discoveries from comparing MIDI with the PDF. The aim is a working application and a clear account of how one Song can hold musical meaning without being tied to one picture of that music.
+This README is a living reference. We extend it when a decision becomes settled, when an experiment starts to work, and when a comparison of the MIDI with the PDF teaches us something we did not know. The aim is a working application, and a clear account of how one Song can hold a whole piece of music while the page draws that piece as many independent measures.
