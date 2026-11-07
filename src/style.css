@@ -64,6 +64,43 @@ body {
   margin: 0;
 }
 
+.storage {
+  margin-top: 48px;
+  padding-top: 28px;
+  border-top: 1px solid #7a4e2d;
+}
+
+.storage__title {
+  margin: 0 0 16px;
+  color: #2a1a0e;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.storage__facts {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.storage__facts dt {
+  margin: 0;
+  color: #7a4e2d;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.storage__facts dd,
+.storage__message {
+  margin: 0;
+  color: #2a1a0e;
+}
+
 .measure {
   margin-top: 48px;
   padding-top: 28px;
@@ -178,6 +215,23 @@ body {
 
   .sheet__subtitle {
     font-size: 16px;
+  }
+
+  .storage {
+    margin-top: 32px;
+  }
+
+  .storage__title {
+    font-size: 22px;
+  }
+
+  .storage__facts {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .storage__facts dd {
+    margin-bottom: 10px;
   }
 
   .measure {

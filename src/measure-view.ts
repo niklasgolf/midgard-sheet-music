@@ -1,22 +1,22 @@
-import type { ChopinMeasure, NoteGroup } from './midi/chopin-measure.ts'
+import type { NoteGroup, NotePreview } from './midi/chopin-measure.ts'
 
-export function renderMeasure(container: HTMLElement, measure: ChopinMeasure): void {
+export function renderMeasure(container: HTMLElement, preview: NotePreview): void {
   const title = document.createElement('h2')
   title.className = 'measure__title'
-  title.textContent = 'Chopin — Prelude Op. 28 No. 7'
+  title.textContent = `${preview.composer} — ${preview.title}`
 
   const meta = document.createElement('p')
   meta.className = 'measure__meta'
   meta.textContent = [
-    'Measure 1',
-    `Time signature ${measure.measure.meter.beats}/${measure.measure.meter.beatValue} (supplied)`,
-    `${measure.noteCount} notes`,
+    `Ticks ${preview.windowStart}–${preview.windowEnd}`,
+    'temporary development view',
+    `${preview.noteCount} notes`,
   ].join(' · ')
 
   const hands = document.createElement('div')
   hands.className = 'measure__hands'
 
-  for (const hand of measure.hands) {
+  for (const hand of preview.hands) {
     const panel = document.createElement('section')
     panel.className = 'measure__hand'
 
@@ -44,7 +44,7 @@ export function renderMeasure(container: HTMLElement, measure: ChopinMeasure): v
 export function renderMeasureError(container: HTMLElement, message: string): void {
   const title = document.createElement('h2')
   title.className = 'measure__title'
-  title.textContent = 'Chopin — Prelude Op. 28 No. 7'
+  title.textContent = 'Stored Song'
 
   const detail = document.createElement('p')
   detail.className = 'measure__meta'

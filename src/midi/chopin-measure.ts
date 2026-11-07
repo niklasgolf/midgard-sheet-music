@@ -1,14 +1,6 @@
-import chopinUrl from '../../midi-files/chopin-prelude-op-28-no-7-in-a-major.mid?url'
-import { notesStartingInMeasure, type MeasureWindow } from './measure.ts'
-import { parseMidi, type MidiNote, type MidiTrackInfo } from './parse-midi.ts'
+import type { MidiNote, MidiTrackInfo } from './parse-midi.ts'
+import type { Song } from '../song/song.ts'
 import { pitchName } from './pitch.ts'
-
-/** Supplied for this file. The MIDI itself contains no time signature and no barlines. */
-export const chopinFirstMeasure: MeasureWindow = {
-  startTick: 0,
-  endTick: 2000,
-  meter: { beats: 3, beatValue: 4 },
-}
 
 export type HandId = 'right' | 'left' | 'other'
 
@@ -24,26 +16,32 @@ export type HandPart = {
   groups: NoteGroup[]
 }
 
-export type ChopinMeasure = {
-  measure: MeasureWindow
+/** A screen slice of a stored Song. The tick window is not a saved measure. */
+export type NotePreview = {
+  composer: string
+  title: string
+  windowStart: number
+  windowEnd: number
   noteCount: number
   hands: HandPart[]
 }
 
-export async function loadChopinFirstMeasure(): Promise<ChopinMeasure> {
-  const response = await fetch(chopinUrl)
-  if (!response.ok) {
-    throw new Error(`Could not load the Chopin MIDI file (${response.status}).`)
-  }
-
-  const bytes = new Uint8Array(await response.arrayBuffer())
-  const midi = parseMidi(bytes)
-  const notes = notesStartingInMeasure(midi.notes, chopinFirstMeasure)
+export function previewSongTickWindow(
+  song: Song,
+  windowStart: number,
+  windowEnd: number,
+): NotePreview {
+  const notes = song.originalMidi.notes.filter(
+    (note) => note.startTick >= windowStart && note.startTick < windowEnd,
+  )
 
   return {
-    measure: chopinFirstMeasure,
+    composer: song.metadata.composer,
+    title: song.metadata.title,
+    windowStart,
+    windowEnd,
     noteCount: notes.length,
-    hands: handsFromTrackNames(midi.tracks, notes),
+    hands: handsFromTrackNames(song.originalMidi.tracks, notes),
   }
 }
 
