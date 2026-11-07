@@ -1,0 +1,85 @@
+/*
+  Page frame adapted from Civilization of Wonders Wiki
+  (src/styles/style-civ-wiki.css in civ-8-world-builder).
+*/
+
+:root {
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  padding: 32px 20px 48px;
+  background: #0e1c2e;
+  color: #3d2918;
+  font-family: Palatino, 'Palatino Linotype', 'Iowan Old Style', Georgia, serif;
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.sheet {
+  width: 100%;
+  max-width: 1200px;
+  min-height: calc(100vh - 80px);
+  margin: 0 auto;
+  padding: 52px 64px 64px;
+  background: #c7a47f;
+  color: #3d2918;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+}
+
+.sheet__intro {
+  margin-bottom: 40px;
+}
+
+.sheet__title {
+  margin: 0 0 10px;
+  color: #2a1a0e;
+  font-size: 40px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.sheet__subtitle {
+  margin: 0;
+  color: #4a3120;
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+.sheet__lead {
+  max-width: 42rem;
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  body {
+    padding: 16px 12px 28px;
+    font-size: 16px;
+  }
+
+  .sheet {
+    min-height: calc(100vh - 44px);
+    padding: 28px 18px 36px;
+  }
+
+  .sheet__title {
+    font-size: 30px;
+  }
+
+  .sheet__subtitle {
+    font-size: 16px;
+  }
+}
