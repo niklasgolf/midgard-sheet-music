@@ -57,6 +57,7 @@ export function applySongSettings(song: Song, settings: SongSettingsInput): Song
     },
     originalMidi: song.originalMidi,
     musicalInterpretation,
+    ...(song.display === undefined ? {} : { display: song.display }),
   }
 }
 

@@ -1,7 +1,9 @@
 import midiAUrl from '../../midi-files/chopin-prelude-op-28-no-7-in-a-major.mid?url'
 import midiBUrl from '../../midi-files/chopin-prelude-op-28-no-7-in-a-major-b.mid?url'
+import midiCUrl from '../../midi-files/eine-kleine-nachtmusik-intermediate.mid?url'
 import pdfAUrl from '../../pdf-files/chopin-prelude-op-28-no-7-in-a-major.pdf?url'
 import pdfBUrl from '../../pdf-files/chopin-prelude-op-28-no-7-in-a-major-b.pdf?url'
+import pdfCUrl from '../../pdf-files/eine-kleine-nachtmusik-intermediate.pdf?url'
 import { parseMidi, type MidiFile } from '../midi/parse-midi.ts'
 import type { SongRepository } from './song-repository.ts'
 import { SONG_SCHEMA_VERSION, type Song } from './song.ts'
@@ -10,6 +12,8 @@ import { SONG_SCHEMA_VERSION, type Song } from './song.ts'
 export const CHOPIN_SONG_ID = 'chopin-prelude-op-28-no-7'
 
 export const CHOPIN_SONG_B_ID = 'chopin-prelude-op28-no7-b'
+
+export const EINE_KLEINE_SONG_ID = 'eine-kleine-nachtmusik-intermediate'
 
 type ProjectSongFile = {
   id: string
@@ -43,6 +47,15 @@ const PROJECT_SONGS: readonly ProjectSongFile[] = [
     pdfFilename: 'chopin-prelude-op-28-no-7-in-a-major-b.pdf',
     midiUrl: midiBUrl,
     pdfUrl: pdfBUrl,
+  },
+  {
+    id: EINE_KLEINE_SONG_ID,
+    title: 'Eine kleine Nachtmusik — Intermediate',
+    composer: 'Wolfgang Amadeus Mozart',
+    sourceFilename: 'eine-kleine-nachtmusik-intermediate.mid',
+    pdfFilename: 'eine-kleine-nachtmusik-intermediate.pdf',
+    midiUrl: midiCUrl,
+    pdfUrl: pdfCUrl,
   },
 ]
 

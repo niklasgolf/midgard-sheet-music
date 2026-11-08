@@ -1,14 +1,12 @@
+import type { MidiNote } from '../midi/parse-midi.ts'
 import { fractionFromQuarters } from '../interpretation/duration.ts'
 import { buildMeasureContent } from '../interpretation/measure-content.ts'
 import { assignPianoStaffs, type PianoStaff } from '../interpretation/staff.ts'
-import type { Song, TimeSignature } from '../song/song.ts'
-import { writtenMeasures } from './written-measures.ts'
+import { completeMeasureRequest, type Song, type TimeSignature } from '../song/song.ts'
+import { displayedMeasures } from './written-measures.ts'
 import { measureSvg } from './piano-measure-svg.ts'
 
-/** Pickup plus sixteen complete measures. The page layout chooses this count. */
-const EXPERIMENT_MEASURE_COUNT = 17
-
-/** Draws the development measures from the stored Song. The SVGs are not saved. */
+/** Draws the selected measures from the stored Song. The SVGs are not saved. */
 export function renderEngraving(container: HTMLElement, song: Song): void {
   const title = document.createElement('h2')
   title.id = 'engraving-title'
@@ -16,7 +14,7 @@ export function renderEngraving(container: HTMLElement, song: Song): void {
   title.textContent = 'Traditional Sheet Music — SVG Experiment'
 
   const interpretation = song.musicalInterpretation
-  const plan = writtenMeasures(interpretation, EXPERIMENT_MEASURE_COUNT)
+  const plan = displayedMeasures(interpretation, song.originalMidi.notes, completeMeasureRequest(song))
   const ticksPerWrittenQuarter = interpretation.ticksPerWrittenQuarter
   const timeSignature = interpretation.timeSignature
   if (!plan.ready || ticksPerWrittenQuarter === undefined || timeSignature === undefined) {
@@ -28,8 +26,15 @@ export function renderEngraving(container: HTMLElement, song: Song): void {
     container.replaceChildren(title, message)
     return
   }
+  if (plan.measures.length === 0) {
+    const message = document.createElement('p')
+    message.className = 'engraving__message'
+    message.textContent = 'There are no notes at or after the written start, so there are no measures to draw.'
+    container.replaceChildren(title, message)
+    return
+  }
 
-  const staves = assignPianoStaffs(song.originalMidi.notes)
+  const staves = assignPianoStaffs(song.originalMidi.notes, interpretation)
   if (!staves.ready) {
     const message = document.createElement('p')
     message.className = 'engraving__message'
@@ -50,6 +55,7 @@ export function renderEngraving(container: HTMLElement, song: Song): void {
         ticksPerWrittenQuarter,
         timeSignature,
         staves.staffByTrack,
+        staves.staffForNote,
       ),
     )
   }
@@ -64,6 +70,7 @@ function measureBlock(
   ticksPerWrittenQuarter: number,
   timeSignature: TimeSignature,
   staffByTrack: ReadonlyMap<number, PianoStaff>,
+  staffForNote: (note: MidiNote) => PianoStaff | undefined,
 ): HTMLElement {
   const item = document.createElement('div')
   item.className = 'engraving__item'
@@ -81,6 +88,7 @@ function measureBlock(
     span,
     ticksPerWrittenQuarter,
     staffByTrack,
+    staffForNote,
     measureQuarters: fractionFromQuarters(spanQuarters),
     sustainedNotes: song.musicalInterpretation.sustainedNotes,
     writtenDurations: song.musicalInterpretation.writtenDurations,

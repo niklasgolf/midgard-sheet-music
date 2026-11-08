@@ -98,6 +98,16 @@ export type MusicalInterpretation = {
   /** MIDI ticks that last as long as one written quarter note. Not the file PPQ. */
   ticksPerWrittenQuarter?: number
   /**
+   * MIDI tick where written Bar 1 begins, or where the pickup begins when there is one.
+   * Absent means tick 0. The stored note times are not moved.
+   */
+  writtenStartTick?: number
+  /**
+   * For one note-bearing track, MIDI pitches at or above this number go to the treble staff.
+   * Lower pitches go to the bass. Two-track piano files keep their track order.
+   */
+  staffSplitPitch?: number
+  /**
    * Explicit spellings for MIDI sounds that are not one catalog duration.
    * Absent until an interpretation is stored. Drawing reads this list from the Song.
    */
@@ -114,6 +124,23 @@ export type MusicalInterpretation = {
   graceNotes?: readonly GraceNoteReading[]
 }
 
+/** How many complete written measures the page draws for one Song. A pickup is extra. */
+export type MeasureDisplay = { kind: 'count'; count: number } | { kind: 'all' }
+
+export type SongDisplay = {
+  measures: MeasureDisplay
+}
+
+/** Complete measures drawn when a Song has no saved display choice. A pickup is extra. */
+export const DEFAULT_COMPLETE_MEASURES = 16
+
+export function completeMeasureRequest(song: Song): number | 'all' {
+  const measures = song.display?.measures
+  if (measures === undefined) return DEFAULT_COMPLETE_MEASURES
+  if (measures.kind === 'all') return 'all'
+  return measures.count
+}
+
 export type Song = {
   id: string
   schemaVersion: number
@@ -121,6 +148,8 @@ export type Song = {
   /** Complete result of the MIDI parser, preserved as imported. */
   originalMidi: MidiFile
   musicalInterpretation: MusicalInterpretation
+  /** How many measures to draw. Absent until the display control saves a choice. */
+  display?: SongDisplay
 }
 
 export function isSong(value: unknown): value is Song {
@@ -131,7 +160,8 @@ export function isSong(value: unknown): value is Song {
     typeof song.schemaVersion === 'number' &&
     isMetadata(song.metadata) &&
     isMidiFile(song.originalMidi) &&
-    isInterpretation(song.musicalInterpretation)
+    isInterpretation(song.musicalInterpretation) &&
+    (song.display === undefined || isDisplay(song.display))
   )
 }
 
@@ -189,7 +219,29 @@ function isInterpretation(value: unknown): value is MusicalInterpretation {
   if (interpretation.graceNotes !== undefined && !isGraceNotes(interpretation.graceNotes)) {
     return false
   }
+  if (interpretation.writtenStartTick !== undefined && !isWrittenStartTick(interpretation.writtenStartTick)) {
+    return false
+  }
+  if (interpretation.staffSplitPitch !== undefined && !isStaffSplitPitch(interpretation.staffSplitPitch)) {
+    return false
+  }
   return true
+}
+
+function isWrittenStartTick(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+}
+
+function isStaffSplitPitch(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 127
+}
+
+function isDisplay(value: unknown): value is SongDisplay {
+  if (value === null || typeof value !== 'object') return false
+  const measures = (value as Partial<SongDisplay>).measures
+  if (measures === undefined || measures === null || typeof measures !== 'object') return false
+  if (measures.kind === 'all') return true
+  return measures.kind === 'count' && Number.isInteger(measures.count) && measures.count >= 1
 }
 
 function isSustainedNotes(value: unknown): value is readonly SustainedNoteReading[] {

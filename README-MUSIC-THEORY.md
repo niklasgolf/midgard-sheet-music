@@ -11,7 +11,7 @@ Four kinds of statement appear here, and they are not the same thing:
 | Planned | We intend to build this, and the design is still open to the next investigation |
 | Open | We have not chosen an answer |
 
-The application now keeps more than one Song, draws up to seventeen measures, and lays the page out with CSS Grid. Ties across measures are a decided design. They are not drawn yet.
+The application now keeps more than one Song, draws the measures chosen for that Song, and lays the page out with CSS Grid. A Song with no saved choice still draws sixteen complete measures, plus a pickup when the Song has one. Ties across measures are a decided design. They are not drawn yet.
 
 ## 1. A Song and a measure are different things
 
@@ -171,7 +171,7 @@ In Song B’s file, PPQ is 384, and the development reading uses a written quart
 | Song operations | `SongRepository` in `src/song/song-repository.ts` |
 | Current database | `IndexedDBSongRepository` in `src/song/indexeddb-song-repository.ts`, using `src/song/song-database.ts` |
 
-No schema migration was required for a second Song, for an optional PDF filename, or for `sustainedNotes`. That field is optional on the interpretation the Song already stores. The database version stays 1. `Song` has `id`, `schemaVersion` (currently 1), `metadata`, `originalMidi`, and `musicalInterpretation`. `originalMidi` is the parser’s own `MidiFile` type. The parser result is plain data, so IndexedDB structured clone can store it.
+No schema migration was required for a second Song, for a third Song, for an optional PDF filename, for `sustainedNotes`, for a written start tick, for a staff split pitch, or for a display choice stored beside the interpretation. Those fields are optional. The database version stays 1. `Song` has `id`, `schemaVersion` (currently 1), `metadata`, `originalMidi`, and `musicalInterpretation`. `originalMidi` is the parser’s own `MidiFile` type. The parser result is plain data, so IndexedDB structured clone can store it.
 
 ### The repository
 
@@ -188,14 +188,15 @@ This is dependency inversion. Interpretation and SVG engraving receive a Song, o
 
 Convex is the planned database for the phase after this prototype can render a complete composition. It is not installed, and there is no Convex client or placeholder class. When that phase starts, a Convex repository can implement the same interface. The musical engine should not need to be rewritten to change databases.
 
-On startup, `ensureProjectSongs` looks up two project ids through the repository:
+On startup, `ensureProjectSongs` looks up three project ids through the repository:
 
 | Song | Id | MIDI file | PDF file |
 |---|---|---|---|
 | Song A | `chopin-prelude-op-28-no-7` | `chopin-prelude-op-28-no-7-in-a-major.mid` | `chopin-prelude-op-28-no-7-in-a-major.pdf` |
 | Song B | `chopin-prelude-op28-no7-b` | `chopin-prelude-op-28-no-7-in-a-major-b.mid` | `chopin-prelude-op-28-no-7-in-a-major-b.pdf` |
+| Song C | `eine-kleine-nachtmusik-intermediate` | `eine-kleine-nachtmusik-intermediate.mid` | `eine-kleine-nachtmusik-intermediate.pdf` |
 
-Song A’s id is the one already used by the first import. It is kept. Song B is a different record. If an id is already stored, that record’s MIDI and settings are left alone. If it is missing, the MIDI is parsed once and the Song is inserted with an empty interpretation. The dropdown is then filled from `listSongs()`, not from this table. A later import will appear there without a change to the menu.
+Song A’s id is the one already used by the first import. It is kept. Song B and Song C are different records. If an id is already stored, that record’s MIDI and settings are left alone. If it is missing, the MIDI is parsed once and the Song is inserted with an empty interpretation. The dropdown is then filled from `listSongs()`, not from this table. A later import will appear there without a change to the menu.
 
 After the library is loaded, one install looks at Song B only. It carries the confirmed spellings: the Bar 5 D4, the Bar 11 C♯5 and E5, the Bar 15 and 16 A4 halves, the Bar 15 written sixteenth, and the Bar 15 grace note. Each spelling is added only when Part B still contains that exact MIDI event and Part C does not already spell it. A grace note is also checked against the principal note it names. Missing spellings are appended in one save. A second startup finds them and does not write. A Bar 5 reading stored without tie flags still means both junctions are tied, so the install does not rewrite it. If Part C already spells the same event with a different written value, different tie flags, or a different grace-note reading, that stored spelling stays and the install says so. Song A is not part of the install. Parts A and B, and every other Part C field, stay as they were. This is not a schema migration. The database version stays 1.
 
@@ -207,7 +208,7 @@ There is still no general file-picker import and no portable Song file.
 
 ### How a Song moves
 
-**Import.** The parser reads a Standard MIDI file and returns structured information. It does not invent barlines, ties, or spelling. Today this runs for the two project files, and only when each Song is missing. A general file picker is planned.
+**Import.** The parser reads a Standard MIDI file and returns structured information. It does not invent barlines, ties, or spelling. Today this runs for the three project files, and only when each Song is missing. A general file picker is planned.
 
 **Create.** The application builds one Song. Part A receives the title, composer, source filename, and PDF filename. Part B receives the parsed MIDI. Part C starts empty. The Song is inserted into `songs`. This is implemented for a missing project Song.
 
@@ -215,7 +216,7 @@ There is still no general file-picker import and no portable Song file.
 
 **Interpret.** Song Settings can change the composition-wide fields of the selected Song and save them. A confirmed written spelling can also be stored in Part C, as Song B’s D4 is. The Music Editor, for individual notes and ties, is not implemented. Measure boundaries are derived for drawing. They are not stored as a list of ticks.
 
-**Render.** The text panel reads stored notes inside a temporary tick window. The SVG experiment reads the same Song and draws seventeen measures when the required settings exist. It does not open the MIDI file, and it does not store the picture.
+**Render.** The text panel reads stored notes inside a temporary tick window. The SVG experiment reads the same Song and draws the measures chosen in Sheet Music Display. It does not open the MIDI file, and it does not store the picture.
 
 ## 5. Song Settings and the Music Editor
 
@@ -389,7 +390,7 @@ The engine is designed around:
 
 It should stay modular enough to read. A final directory tree is not fixed here.
 
-The current modules interpret a written duration, assign the first note-bearing track to the treble staff and the second to the bass, place chord noteheads, draw stems and augmentation dots, and space note columns from the written rhythm. Unrecognized durations are reported and still given a notehead. None of that is stored back into the Song.
+The current modules interpret a written duration, assign piano staves, place chord noteheads, draw stems and augmentation dots, and space note columns from the written rhythm. Two note-bearing tracks keep their order. One note-bearing track uses a staff split pitch from Part C when that Song has one. Unrecognized durations are reported and still given a notehead. None of that is stored back into the Song.
 
 | Area | What it decides | Today |
 |---|---|---|
@@ -409,7 +410,7 @@ The current modules interpret a written duration, assign the first note-bearing 
 | Collision avoidance beyond the current chord offsets | How nearby symbols move so they remain readable | Only the current chord rule |
 | Musical typography | The consistent look of a finished engraving | In progress |
 
-Staff assignment does not read the words “right hand” or “left hand.” The first track that contains notes becomes the treble staff. The second becomes the bass. A Song with any other number of note-bearing tracks is not drawn. The text preview still labels a hand only when the track name is exactly `Main droite` or `Main gauche`.
+Staff assignment does not read the words “right hand” or “left hand.” When two tracks contain notes, the first becomes the treble staff and the second becomes the bass. When one track contains every note, Part C may name a `staffSplitPitch`. MIDI pitches at or above that number are read on the treble staff, and lower pitches on the bass. The track number on each note stays as it was. A Song with any other number of note-bearing tracks is not drawn, and a one-track Song without a split pitch is not drawn. The text preview still labels a hand only when the track name is exactly `Main droite` or `Main gauche`.
 
 ## 10. VexFlow is a reference, not the runtime
 
@@ -773,6 +774,49 @@ In Bar 16 the second half joins the C♯5 and A5 halves that already begin at ti
 
 The half notes are still drawn with the engine’s filled notehead. Open half-note heads, and the separate stem directions printed for A4 and the notes above it, are not part of this spelling. The dotted eighth and sixteenth at the start of Bar 15 are beamed. The long phrase slur, hairpins, and fingerings are still absent. Bars 15 and 16 can be compared with the PDF for these A4s. They are not yet a complete engraving of those bars.
 
+### Song C
+
+Song C is an intermediate piano arrangement of Wolfgang Amadeus Mozart’s *Eine kleine Nachtmusik*. The MIDI file is imported whole. The picture can draw its measures. The performed durations are not yet the written rhythm, so many noteheads are still unresolved.
+
+| Fact | Value |
+|---|---|
+| Id | `eine-kleine-nachtmusik-intermediate` |
+| Title | Eine kleine Nachtmusik — Intermediate |
+| MIDI file | `midi-files/eine-kleine-nachtmusik-intermediate.mid` |
+| PDF file | `pdf-files/eine-kleine-nachtmusik-intermediate.pdf` |
+| MIDI format | 1 |
+| Tracks | 1, and every note is on that track |
+| PPQ | 480 |
+| Tempo | One event, at tick 0: 500,000 microseconds per MIDI quarter, which is 120 BPM |
+| Paired notes | 872 |
+| Time-signature event | 4/4 at tick 0 |
+| Key-signature event | none |
+| First note onset | Tick 2734 |
+| Last note release | Tick 91944 |
+
+The PDF is a piano grand staff in 4/4 with one sharp and no pickup. G major is read from that sharp. The MIDI file does not contain a key signature, and the importer does not write one into Part C. The same is true of the written quarter. PPQ is 480, and a later reading may use 480 ticks per written quarter, but that number is interpretation. The page does not copy it from the file.
+
+The 2734 ticks before the first note are silence at the start of the performance. They are not a pickup. Part B keeps those timestamps. Part C records `writtenStartTick: 2734`, which is the MIDI tick where printed Bar 1 begins. A Song that omits the field still begins at tick 0, which is what Songs A and B do. The planner adds the tick to each measure span. It does not subtract it from the notes, and it does not quantize them.
+
+There is no pickup, so the plan begins at Bar 1. Each complete bar is four written quarters. At 480 ticks per written quarter that is 1920 ticks. The first six bars are half-open spans:
+
+| Bar | Start tick | End tick |
+|---|---:|---:|
+| 1 | 2734 | 4654 |
+| 2 | 4654 | 6574 |
+| 3 | 6574 | 8494 |
+| 4 | 8494 | 10414 |
+| 5 | 10414 | 12334 |
+| 6 | 12334 | 14254 |
+
+From that origin through the last note onset is 47 complete measures. A Song with a pickup still draws Bar 0 before Bar 1. The number in Sheet Music Display counts complete measures only, so the first six measures of Song A or Song B are Bar 0 plus Bars 1–6.
+
+Both hands live on the one MIDI track. Part C records `staffSplitPitch: 60`. Pitches 60 and above are read on the treble staff, and lower pitches on the bass. This is a provisional split for engraving. It is not a claim that every note sits on the printed staff, and a later per-note staff choice can replace it. Songs A and B have two note-bearing tracks, so their staff assignment stays the track order even if a split pitch is also present.
+
+Sheet Music Display, in the right-hand panel, chooses First 6 measures, First 12 measures, All measures, or a custom positive whole number. The choice is stored on the Song, beside Part C, and each Song keeps its own. Saving Song Settings leaves it in place. A Song with no choice still draws 16 complete measures, plus Bar 0 when there is a pickup. Song C’s first saved choice is the first 6 measures. A later choice replaces it. A number larger than the piece draws through the last measure that contains a note and says so. The original 872 notes stay in Part B.
+
+The sounding durations are a performance. They are often near an eighth or a sixteenth and are rarely an exact catalog value. Those notes are drawn unresolved, at the onset the file recorded. The written eighths, sixteenths, beams, and individual flags belong in a later interpretation. Step ⑦, flags on notes that are not beamed, can use Bar 1’s isolated eighths as its first example. The systems examined so far show sixteenths inside beams, not as separate two-flag notes. Clefs, the printed sharp, rests, and flags are not drawn yet.
+
 ## 15. Beams
 
 A beam groups short written notes. It is not a tie, and it is not stored in Part C. The written durations and the time signature already say which notes belong together. Song B needs no new interpretation for its beams.
@@ -797,13 +841,13 @@ The drawing currently accepts two events. A longer group is still identified, an
 
 ## 16. The SVG experiment
 
-Under the heading **Traditional Sheet Music — SVG Experiment**, the page draws seventeen measures when Song Settings has a time signature, a pickup of a written duration, and ticks per written quarter. If any of those is missing, or if the pickup is explicitly absent, the section says so and draws no measures. It does not silently use PPQ.
+Under the heading **Traditional Sheet Music — SVG Experiment**, the page draws the measures chosen for the selected Song. The choice needs a time signature, a pickup answer, and ticks per written quarter. A pickup answer may be no. The written start tick, when saved, places Bar 1 or the pickup. If a required setting is missing, the section says so and draws no measures. It does not silently use PPQ.
 
 Each measure is one div and one SVG. The grid places three measures on each row. The SVG keeps the size the engraving calculated.
 
 For the selected Song, a recognized note is drawn with its notehead, its ledger lines, its stem when the duration has one, and its dot when the duration has one. Eighths and sixteenths that share a beat also receive a beam, inside that measure’s SVG. An unresolved note is drawn as a crimson notehead at its real onset. The warning under the measure lists the track, pitch, onset, duration, and the reason. The original MIDI is not changed.
 
-The hand on the staff comes from track order, as section 9 describes. The measures read `originalMidi` and `musicalInterpretation` from the stored Song. Switching Songs redraws the PDF, the measures, and the settings from that Song alone.
+The hand on the staff comes from track order, or from the staff split pitch when the Song has one track, as section 9 describes. The measures read `originalMidi` and `musicalInterpretation` from the stored Song. Switching Songs redraws the PDF, the measures, the settings, and that Song’s display choice.
 
 The experiment does not yet draw:
 
@@ -820,7 +864,7 @@ A tie is drawn when Part C spells the MIDI sound as written notes. A grace note 
 
 ## 17. Where the engraving stands
 
-The first engraving target was a professionally readable Bar 0 and Bar 1. The experiment has since been widened to seventeen measures for whichever Song is selected. That widening did not delete or shorten either Song. Song A’s 176 notes and Song B’s 168 notes remain in IndexedDB.
+The first engraving target was a professionally readable Bar 0 and Bar 1. A Song with no display choice still draws sixteen complete measures, plus a pickup when it has one. Sheet Music Display can ask for fewer, or for every measure that contains a note. That choice does not delete or shorten a Song. Song A’s 176 notes, Song B’s 168 notes, and Song C’s 872 notes remain in IndexedDB.
 
 The engine stays general. Another Song, or a later measure, must be drawable without a new piece of Chopin-specific drawing code. The Bar 5 reading is a musical conclusion stored on Song B. The renderer does not contain that Song’s id.
 
@@ -944,7 +988,7 @@ Engraving and layout:
 
 Storage and the life of a Song:
 
-- How should Song IDs be generated for a future import, beyond the two project ids?
+- How should Song IDs be generated for a future import, beyond the three project ids?
 - How should the selected Song be remembered after a refresh?
 - How should the Song schema be versioned when a future change cannot be expressed as an optional field? Adding `sustainedNotes` did not require a new database version. A change that rewrites existing records still needs a plan.
 - How do we preserve imported events that the parser does not yet fully interpret, so a later parser can still see them?

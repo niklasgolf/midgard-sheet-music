@@ -134,6 +134,38 @@
           <p class="settings__status" id="song-settings-status" role="status" aria-live="polite"></p>
         </form>
       </section>
+      <section class="settings" aria-labelledby="display-title">
+        <h2 class="settings__title" id="display-title">Sheet Music Display</h2>
+        <p class="settings__intro">
+          How many complete measures to draw for this Song. A pickup is shown as well and is not
+          part of the count. The imported MIDI stays complete.
+        </p>
+        <form class="settings__form" id="sheet-display-form">
+          <fieldset class="settings__group">
+            <legend class="settings__legend" id="display-measures-label">Number of measures</legend>
+            <div class="settings__field">
+              <select id="display-measures" name="measures" aria-labelledby="display-measures-label">
+                <option value="6">First 6 measures</option>
+                <option value="12">First 12 measures</option>
+                <option value="all">All measures</option>
+                <option value="custom">Custom number</option>
+              </select>
+            </div>
+            <label class="settings__field" for="display-custom-count" data-custom-count hidden>
+              Custom number
+              <input
+                id="display-custom-count"
+                name="customCount"
+                type="text"
+                inputmode="numeric"
+                autocomplete="off"
+              />
+              <span class="settings__hint">A positive whole number of complete measures.</span>
+            </label>
+          </fieldset>
+          <p class="settings__status" id="sheet-display-status" role="status" aria-live="polite"></p>
+        </form>
+      </section>
       <div class="measure" id="measure-1" aria-label="Notes from the stored Song"></div>
         </main>
       </div>

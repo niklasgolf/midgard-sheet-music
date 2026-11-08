@@ -108,6 +108,8 @@ export function buildMeasureContent(options: {
   span: { startTick: number; endTick: number }
   ticksPerWrittenQuarter: number
   staffByTrack: ReadonlyMap<number, PianoStaff>
+  /** When present, this chooses the staff. Track order is the fallback. */
+  staffForNote?: (note: MidiNote) => PianoStaff | undefined
   measureQuarters: Fraction
   /** Explicit spellings of MIDI sounds that are written as several tied notes. */
   sustainedNotes?: readonly SustainedNoteReading[]
@@ -181,6 +183,14 @@ export function buildMeasureContent(options: {
   }
 }
 
+function assignedStaff(
+  options: { staffByTrack: ReadonlyMap<number, PianoStaff>; staffForNote?: (note: MidiNote) => PianoStaff | undefined },
+  note: MidiNote,
+): PianoStaff | undefined {
+  if (options.staffForNote !== undefined) return options.staffForNote(note)
+  return options.staffByTrack.get(note.track)
+}
+
 function placeGraceNote(
   note: MidiNote,
   reading: GraceNoteReading,
@@ -188,7 +198,7 @@ function placeGraceNote(
   graceNotes: MeasureGraceNote[],
   unresolved: UnresolvedNote[],
 ): void {
-  const staff = options.staffByTrack.get(note.track)
+  const staff = assignedStaff(options, note)
   if (staff === undefined) {
     unresolved.push(unresolvedNote(note, `Track ${note.track} has no piano staff assignment.`))
     return
@@ -221,7 +231,7 @@ function placeOverriddenNote(
   unresolved: UnresolvedNote[],
   spanTicks: number,
 ): void {
-  const staff = options.staffByTrack.get(note.track)
+  const staff = assignedStaff(options, note)
   if (staff === undefined) {
     unresolved.push(unresolvedNote(note, `Track ${note.track} has no piano staff assignment.`))
     return
@@ -263,7 +273,7 @@ function placeSpelledNote(
   ties: MeasureTie[],
   spanTicks: number,
 ): void {
-  const staff = options.staffByTrack.get(note.track)
+  const staff = assignedStaff(options, note)
   if (staff === undefined) {
     if (beginsInSpan(note.startTick, options.span)) {
       unresolved.push(unresolvedNote(note, `Track ${note.track} has no piano staff assignment.`))
@@ -308,7 +318,7 @@ function placeSingleNote(
   unresolved: UnresolvedNote[],
   spanTicks: number,
 ): void {
-  const staff = options.staffByTrack.get(note.track)
+  const staff = assignedStaff(options, note)
   if (staff === undefined) {
     unresolved.push(unresolvedNote(note, `Track ${note.track} has no piano staff assignment.`))
     return
