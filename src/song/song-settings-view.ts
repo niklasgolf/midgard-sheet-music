@@ -13,8 +13,6 @@ export function mountSongSettings(
   repository: SongRepository,
   onSaved: (song: Song) => void,
 ): SongSettingsController {
-  const title = requiredField<HTMLInputElement>(form, 'title')
-  const composer = requiredField<HTMLInputElement>(form, 'composer')
   const numerator = requiredField<HTMLInputElement>(form, 'numerator')
   const denominator = requiredField<HTMLSelectElement>(form, 'denominator')
   const key = requiredField<HTMLSelectElement>(form, 'key')
@@ -45,8 +43,6 @@ export function mountSongSettings(
     show(song) {
       current = song
       fillForm(song, {
-        title,
-        composer,
         numerator,
         denominator,
         key,
@@ -77,7 +73,7 @@ async function save(
     return
   }
 
-  const parsed = parseSongSettings(readValues(form))
+  const parsed = parseSongSettings(readValues(form, song))
   if (!parsed.ok) {
     writeStatus(status, parsed.message, true)
     return
@@ -135,8 +131,6 @@ function fillKeyList(select: HTMLSelectElement): void {
 function fillForm(
   song: Song,
   fields: {
-    title: HTMLInputElement
-    composer: HTMLInputElement
     numerator: HTMLInputElement
     denominator: HTMLSelectElement
     key: HTMLSelectElement
@@ -147,8 +141,6 @@ function fillForm(
   },
 ): void {
   const interpretation = song.musicalInterpretation
-  fields.title.value = song.metadata.title
-  fields.composer.value = song.metadata.composer
   fields.numerator.value = interpretation.timeSignature ? String(interpretation.timeSignature.numerator) : ''
   fields.denominator.value = interpretation.timeSignature ? String(interpretation.timeSignature.denominator) : ''
   fields.key.value = interpretation.keySignature ? keyOptionValue(interpretation.keySignature) : ''
@@ -161,10 +153,10 @@ function fillForm(
     interpretation.ticksPerWrittenQuarter === undefined ? '' : String(interpretation.ticksPerWrittenQuarter)
 }
 
-function readValues(form: HTMLFormElement): SettingsFormValues {
+function readValues(form: HTMLFormElement, song: Song): SettingsFormValues {
   return {
-    title: requiredField<HTMLInputElement>(form, 'title').value,
-    composer: requiredField<HTMLInputElement>(form, 'composer').value,
+    title: song.metadata.title,
+    composer: song.metadata.composer,
     numerator: requiredField<HTMLInputElement>(form, 'numerator').value,
     denominator: requiredField<HTMLSelectElement>(form, 'denominator').value,
     key: requiredField<HTMLSelectElement>(form, 'key').value,

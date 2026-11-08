@@ -124,6 +124,66 @@ body {
   display: none;
 }
 
+.names__title {
+  margin: 18px 0 0;
+  color: #2a1a0e;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.names__title[hidden] {
+  display: none;
+}
+
+.editor__names {
+  margin-top: 28px;
+}
+
+.editor__names[hidden] {
+  display: none;
+}
+
+.names {
+  margin-top: 28px;
+}
+
+.names[hidden] {
+  display: none;
+}
+
+.names__field {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 16px;
+  color: #2a1a0e;
+}
+
+.names input {
+  width: 100%;
+  max-width: 100%;
+  color: #2a1a0e;
+  font: inherit;
+  background: #f4e4cf;
+  border: 1px solid #7a4e2d;
+  padding: 6px 8px;
+}
+
+.names__return {
+  display: block;
+  width: fit-content;
+  margin: 32px 0 0 auto;
+  padding: 0;
+  color: #2a1a0e;
+  font: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .editor__list {
   list-style: disc;
   margin: 22px 0 0;
@@ -593,80 +653,6 @@ body {
   background-color: #ffffff;
 }
 
-.measure {
-  margin-top: 48px;
-  padding-top: 28px;
-  border-top: 1px solid #7a4e2d;
-}
-
-.measure__title {
-  margin: 0 0 8px;
-  color: #2a1a0e;
-  font-size: 26px;
-  font-weight: 600;
-  line-height: 1.25;
-}
-
-.measure__meta {
-  margin: 0 0 28px;
-  color: #4a3120;
-  font-size: 16px;
-}
-
-.measure__hands {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 32px;
-}
-
-.measure__hand {
-  padding: 18px 20px 8px;
-  background: #d4b48c;
-  border: 1px solid #7a4e2d;
-}
-
-.measure__hand-label {
-  margin: 0;
-  color: #2a1a0e;
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 1.3;
-}
-
-.measure__track {
-  margin: 2px 0 12px;
-  color: #7a4e2d;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.measure__events {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.measure__event {
-  display: grid;
-  grid-template-columns: 3.2em minmax(0, 1fr);
-  gap: 16px;
-  margin: 0;
-  padding: 8px 0;
-  border-top: 1px solid #7a4e2d;
-  color: #2a1a0e;
-}
-
-.measure__tick {
-  color: #5c4030;
-  font-variant-numeric: tabular-nums;
-}
-
-.measure__pitches {
-  font-weight: 600;
-}
-
 .reference {
   display: grid;
   min-width: 0;
@@ -725,19 +711,6 @@ body {
 
   .settings__title {
     font-size: 22px;
-  }
-
-  .measure {
-    margin-top: 32px;
-  }
-
-  .measure__title {
-    font-size: 22px;
-  }
-
-  .measure__hands {
-    grid-template-columns: 1fr;
-    gap: 18px;
   }
 
   .engraving__title {

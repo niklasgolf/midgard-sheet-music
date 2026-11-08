@@ -36,6 +36,32 @@ export type SettingsParse =
   | { ok: false; message: string }
 
 /**
+ * Copies the title and composer onto the Song.
+ * The id, schema version, filenames, original MIDI, interpretation, and display stay as they are.
+ */
+export function applySongNames(song: Song, names: { title: string; composer: string }): Song {
+  return {
+    ...song,
+    metadata: {
+      ...song.metadata,
+      title: names.title,
+      composer: names.composer,
+    },
+  }
+}
+
+export function parseSongNames(
+  titleText: string,
+  composerText: string,
+): { ok: true; title: string; composer: string } | { ok: false; message: string } {
+  const title = titleText.trim()
+  const composer = composerText.trim()
+  if (title === '') return { ok: false, message: 'Enter a song title.' }
+  if (composer === '') return { ok: false, message: 'Enter a composer.' }
+  return { ok: true, title, composer }
+}
+
+/**
  * Copies title, composer, and the composition-wide settings onto the Song.
  * The id, schema version, source filename, and original MIDI object stay as they are.
  * Properties of the interpretation other than these settings are kept.

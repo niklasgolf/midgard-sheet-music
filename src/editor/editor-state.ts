@@ -5,6 +5,7 @@
 export type EditorView =
   | { mode: 'choose-song' }
   | { mode: 'edit-song'; songId: string }
+  | { mode: 'edit-names'; songId: string }
 
 /** The screen shown on startup and after a refresh. No Song is selected. */
 export function chooseSongView(): EditorView {
@@ -14,4 +15,9 @@ export function chooseSongView(): EditorView {
 /** The screen shown after the user chooses one stored Song. */
 export function editSongView(songId: string): EditorView {
   return { mode: 'edit-song', songId }
+}
+
+/** The screen for the selected Song's title and composer. */
+export function editNamesView(songId: string): EditorView {
+  return { mode: 'edit-names', songId }
 }

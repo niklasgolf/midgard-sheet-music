@@ -24,6 +24,7 @@
       <header class="editor">
         <h1 class="editor__title">The midGard Sheet Music Editor</h1>
         <h2 class="editor__heading" id="editor-heading">Choose a Song</h2>
+        <h2 class="names__title" id="names-heading" hidden>Edit Names</h2>
         <button class="editor__change" id="change-song" type="button" hidden>Change song</button>
       </header>
       <ul class="editor__list" id="song-choices" aria-labelledby="editor-heading"></ul>
@@ -68,24 +69,8 @@
           <p class="settings__status" id="sheet-display-status" role="status" aria-live="polite"></p>
         </form>
       </section>
-      <section class="storage" id="song-storage" aria-label="Song storage" hidden></section>
-      <section class="settings" aria-labelledby="song-settings-title" hidden>
-        <h2 class="settings__title" id="song-settings-title">Song Settings</h2>
-        <p class="settings__intro">
-          Composition-wide information for this Song. Saving it does not change the imported MIDI.
-        </p>
+      <section class="settings" aria-label="Musical settings" hidden>
         <form class="settings__form" id="song-settings-form">
-          <fieldset class="settings__group">
-            <legend class="settings__legend">Metadata</legend>
-            <label class="settings__field" for="song-title">
-              Song title
-              <input id="song-title" name="title" type="text" autocomplete="off" />
-            </label>
-            <label class="settings__field" for="song-composer">
-              Composer
-              <input id="song-composer" name="composer" type="text" autocomplete="off" />
-            </label>
-          </fieldset>
           <fieldset class="settings__group">
             <legend class="settings__legend">Musical settings</legend>
             <div class="settings__field">
@@ -164,7 +149,23 @@
           <p class="settings__status" id="song-settings-status" role="status" aria-live="polite"></p>
         </form>
       </section>
-      <div class="measure" id="measure-1" aria-label="Notes from the stored Song" hidden></div>
+      <section class="storage" id="song-storage" aria-label="Song storage" hidden></section>
+      <button class="settings__save editor__names" id="edit-names" type="button" hidden>Edit Names</button>
+      <section class="names" id="names-page" aria-labelledby="names-heading" hidden>
+        <form class="names__form" id="song-names-form">
+          <label class="names__field" for="names-title">
+            Song title
+            <input id="names-title" name="title" type="text" autocomplete="off" />
+          </label>
+          <label class="names__field" for="names-composer">
+            Composer
+            <input id="names-composer" name="composer" type="text" autocomplete="off" />
+          </label>
+          <button class="settings__save" type="submit">Save Changes</button>
+          <p class="settings__status" id="song-names-status" role="status" aria-live="polite"></p>
+          <button class="names__return" id="names-return" type="button">Return</button>
+        </form>
+      </section>
         </main>
       </div>
     </div>

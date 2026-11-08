@@ -1,8 +1,6 @@
 import './style.css'
-import { chooseSongView, editSongView, type EditorView } from './editor/editor-state.ts'
-import { previewSongTickWindow } from './midi/chopin-measure.ts'
+import { chooseSongView, editNamesView, editSongView, type EditorView } from './editor/editor-state.ts'
 import { renderEngraving } from './notation/engraving-view.ts'
-import { renderMeasure, renderMeasureError } from './measure-view.ts'
 import type { SongLoad } from './song/import-chopin-song.ts'
 import { IndexedDBSongRepository } from './song/indexeddb-song-repository.ts'
 import { mountSheetDisplay } from './song/display-view.ts'
@@ -11,32 +9,43 @@ import { installSongBInterpretations } from './song/install-sustained-reading.ts
 import { ensureProjectSongs, pdfUrlForSong } from './song/project-songs.ts'
 import type { SongRepository } from './song/song-repository.ts'
 import { mountSongLibrary } from './song/song-library-view.ts'
+import { mountSongNames } from './song/song-names-view.ts'
 import { mountSongSettings } from './song/song-settings-view.ts'
 import { renderSongStatus, renderSongStatusError } from './song/song-status-view.ts'
 import type { Song } from './song/song.ts'
 
 const referencePdf = document.querySelector<HTMLIFrameElement>('#reference-pdf')
 const editorHeading = document.querySelector<HTMLElement>('#editor-heading')
+const namesHeading = document.querySelector<HTMLElement>('#names-heading')
 const changeSong = document.querySelector<HTMLButtonElement>('#change-song')
 const songChoices = document.querySelector<HTMLUListElement>('#song-choices')
 const editorDisplay = document.querySelector<HTMLElement>('#editor-display')
+const editNames = document.querySelector<HTMLButtonElement>('#edit-names')
 const storage = document.querySelector<HTMLElement>('#song-storage')
-const measure = document.querySelector<HTMLElement>('#measure-1')
 const settingsForm = document.querySelector<HTMLFormElement>('#song-settings-form')
 const settingsStatus = document.querySelector<HTMLElement>('#song-settings-status')
+const namesPage = document.querySelector<HTMLElement>('#names-page')
+const namesForm = document.querySelector<HTMLFormElement>('#song-names-form')
+const namesStatus = document.querySelector<HTMLElement>('#song-names-status')
+const namesReturn = document.querySelector<HTMLButtonElement>('#names-return')
 const displayForm = document.querySelector<HTMLFormElement>('#sheet-display-form')
 const displayStatus = document.querySelector<HTMLElement>('#sheet-display-status')
 const engraving = document.querySelector<HTMLElement>('#engraving')
 if (
   !referencePdf ||
   !editorHeading ||
+  !namesHeading ||
   !changeSong ||
   !songChoices ||
   !editorDisplay ||
+  !editNames ||
   !storage ||
-  !measure ||
   !settingsForm ||
   !settingsStatus ||
+  !namesPage ||
+  !namesForm ||
+  !namesStatus ||
+  !namesReturn ||
   !displayForm ||
   !displayStatus ||
   !engraving
@@ -45,18 +54,18 @@ if (
 }
 const pdfFrame: HTMLIFrameElement = referencePdf
 const editorTitle: HTMLElement = editorHeading
+const namesTitle: HTMLElement = namesHeading
 const changeSongButton: HTMLButtonElement = changeSong
 const songList: HTMLUListElement = songChoices
 const displayPanel: HTMLElement = editorDisplay
+const editNamesButton: HTMLButtonElement = editNames
 const storagePanel: HTMLElement = storage
-const measurePanel: HTMLElement = measure
+const namesPanel: HTMLElement = namesPage
+const namesReturnButton: HTMLButtonElement = namesReturn
+const settingsSection = settingsForm.closest('section')
 const engravingPanel: HTMLElement = engraving
-
-/**
- * Temporary screen filter. It is not saved on the Song and is not a verified barline.
- * The stored prelude still contains every imported note.
- */
-const developmentTickWindow = { startTick: 0, endTick: 2000 }
+if (!settingsSection) throw new Error('Song Settings were not found')
+const settingsPanel: HTMLElement = settingsSection
 
 let view: EditorView = chooseSongView()
 let loaded: SongLoad | undefined
@@ -77,8 +86,20 @@ const display = mountSheetDisplay(displayForm, displayStatus, songs, (song) => {
   rememberOpenSong(song)
 })
 
+const names = mountSongNames(namesForm, namesStatus, songs, (song) => {
+  rememberOpenSong(song)
+})
+
 changeSongButton.addEventListener('click', () => {
   void returnToLibrary()
+})
+
+editNamesButton.addEventListener('click', () => {
+  openNames()
+})
+
+namesReturnButton.addEventListener('click', () => {
+  returnFromNames()
 })
 
 ensureProjectSongs(songs)
@@ -97,7 +118,6 @@ ensureProjectSongs(songs)
   .catch((error: unknown) => {
     const message = error instanceof Error ? error.message : 'The stored Song could not be read.'
     renderSongStatusError(storagePanel, message)
-    renderMeasureError(measurePanel, message)
     settingsStatus.textContent = message
     engravingPanel.replaceChildren()
   })
@@ -122,22 +142,73 @@ async function openSong(songId: string): Promise<void> {
 }
 
 function applyEditorChrome(title?: string): void {
+  namesTitle.hidden = view.mode !== 'edit-names'
   if (view.mode === 'choose-song') {
     editorTitle.textContent = 'Choose a Song'
     changeSongButton.hidden = true
     songList.hidden = false
     displayPanel.hidden = true
+    editNamesButton.hidden = true
+    namesPanel.hidden = true
+    showReviewSections(false)
+    return
+  }
+  if (view.mode === 'edit-names') {
+    editorTitle.textContent = title ?? ''
+    changeSongButton.hidden = true
+    songList.hidden = true
+    displayPanel.hidden = true
+    editNamesButton.hidden = true
+    namesPanel.hidden = false
+    showReviewSections(false)
     return
   }
   editorTitle.textContent = title ?? ''
   changeSongButton.hidden = false
   songList.hidden = true
   displayPanel.hidden = false
+  editNamesButton.hidden = false
+  namesPanel.hidden = true
+  showReviewSections(true)
+}
+
+function openNames(): void {
+  const song = loaded?.song
+  if (!song || view.mode !== 'edit-song') return
+  view = editNamesView(song.id)
+  applyEditorChrome(song.metadata.title)
+  names.show(song)
+}
+
+function returnFromNames(): void {
+  if (names.isDirty() && !window.confirm('These name changes are not saved. Return to the song without saving?')) {
+    return
+  }
+  const song = loaded?.song
+  if (!song) {
+    showLibrary()
+    return
+  }
+  view = editSongView(song.id)
+  applyEditorChrome(song.metadata.title)
+}
+
+function showReviewSections(visible: boolean): void {
+  storagePanel.hidden = !visible
+  settingsPanel.hidden = !visible
 }
 
 function rememberOpenSong(song: Song): void {
   librarySongs = librarySongs.map((entry) => (entry.id === song.id ? song : entry))
-  if (view.mode === 'edit-song' && view.songId === song.id) showSong(song, false)
+  if (view.mode === 'choose-song' || view.songId !== song.id) return
+  if (view.mode === 'edit-names') {
+    if (loaded) loaded = { ...loaded, song }
+    editorTitle.textContent = song.metadata.title
+    pdfFrame.title = `${song.metadata.composer} — ${song.metadata.title}`
+    if (loaded) renderSongStatus(storagePanel, loaded)
+    return
+  }
+  showSong(song, false)
 }
 
 async function returnToLibrary(): Promise<void> {
@@ -164,7 +235,6 @@ function clearOpenSong(): void {
   pdfFrame.title = 'Original sheet music'
   engravingPanel.replaceChildren()
   storagePanel.replaceChildren()
-  measurePanel.replaceChildren()
 }
 
 function installMessage(
@@ -190,9 +260,5 @@ function showPdf(song: Song): void {
 
 function renderStoredSong(load: SongLoad): void {
   renderSongStatus(storagePanel, load)
-  renderMeasure(
-    measurePanel,
-    previewSongTickWindow(load.song, developmentTickWindow.startTick, developmentTickWindow.endTick),
-  )
   renderEngraving(engravingPanel, load.song)
 }

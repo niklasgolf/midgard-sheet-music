@@ -62,7 +62,7 @@ Metadata identifies the Song. It is not the music.
 - PDF filename, when this import stored one
 - Later, other composition-level description, such as a catalog number or a note about the edition
 
-Song Settings can change the title and the composer. That change does not rename the source MIDI filename, and it does not remove a stored PDF filename. The MIDI filename stays the name of the file that was imported.
+Edit Names can change the title and the composer. That change does not rename the source MIDI filename, and it does not remove a stored PDF filename. The MIDI filename stays the name of the file that was imported. The Song id stays the same.
 
 A Song imported before PDF filenames existed can still find its project PDF through the project catalog. The catalog is a lookup for the files shipped with this application. It is not a second database.
 
@@ -202,9 +202,9 @@ Song A’s id is the one already used by the first import. It is kept. Song B an
 
 After the library is loaded, one install looks at Song B only. It carries the confirmed spellings: the Bar 5 D4, the Bar 11 C♯5 and E5, the Bar 15 and 16 A4 halves, the Bar 15 written sixteenth, and the Bar 15 grace note. Each spelling is added only when Part B still contains that exact MIDI event and Part C does not already spell it. A grace note is also checked against the principal note it names. Missing spellings are appended in one save. A second startup finds them and does not write. A Bar 5 reading stored without tie flags still means both junctions are tied, so the install does not rewrite it. If Part C already spells the same event with a different written value, different tie flags, or a different grace-note reading, that stored spelling stays and the install says so. Song A is not part of the install. Parts A and B, and every other Part C field, stay as they were. This is not a schema migration. The database version stays 1.
 
-The right panel has two screens. Both keep the title **The midGard Sheet Music Editor**, centered, with the subtitle centered on the next line. Choose a Song lists every record from `listSongs()`. Nothing is selected until the user clicks. Edit Mode replaces that subtitle with the Song’s title and shows Change song, aligned to the right on the next line. The list hides. Beneath that header, Edit Mode shows Measures per row and Measures to display side by side, in two equal columns. A window narrower than 720 pixels stacks those columns. The right panel stays 800 pixels wide. The PDF and the measure SVGs load from `getSong`. Change song asks `listSongs()` again, clears the open Song, and does not call `saveSong`.
+The right panel has three screens. All keep the title **The midGard Sheet Music Editor**, centered, with the subtitle centered on the next line. Choose a Song lists every record from `listSongs()`. Nothing is selected until the user clicks. Edit Mode replaces that subtitle with the Song’s title and shows Change song, aligned to the right on the next line. The list hides. Beneath that header, Edit Mode shows Measures per row and Measures to display side by side, in two equal columns, then the musical settings. Edit Names is the last control in that panel, after Song Storage — IndexedDB. A window narrower than 720 pixels stacks those columns. The right panel stays 800 pixels wide. The PDF and the measure SVGs load from `getSong`. Change song asks `listSongs()` again, clears the open Song, and does not call `saveSong`. Edit Names is a subpage of the right panel for the same Song. The three columns stay in place. The PDF and the measure SVGs stay mounted and visible. Only the right panel changes: it shows the title and composer, and it hides the display controls, the musical settings, and Song Storage. Return restores those controls for the same Song and does not reload the PDF or redraw the score. If the name fields differ from the saved Song, Return asks before leaving and does not save. A refresh still opens Choose a Song.
 
-A refresh always opens Choose a Song. The page does not reopen the Song that was on screen. That choice is temporary editor navigation, held in `EditorView` while the page is open. It is not written into Part C, Song Settings, or IndexedDB. The saved spelling is still in Song B, and drawing reads it only after that Song is chosen again. Song Settings, the storage facts, and the temporary note list remain in the page and stay hidden.
+A refresh always opens Choose a Song. The page does not reopen the Song that was on screen. That choice is temporary editor navigation, held in `EditorView` while the page is open. It is not written into Part C, Song Settings, or IndexedDB. The saved spelling is still in Song B, and drawing reads it only after that Song is chosen again. Edit Mode shows the musical settings beneath the display controls, Song Storage — IndexedDB after them, and Edit Names at the bottom of the panel. Choose a Song hides those sections and clears the PDF and the SVG score. Edit Names hides those sections in the right panel only. The temporary note list has been removed. Edit Names writes only the title and composer. It leaves the Song id, the MIDI filename, the PDF filename, Part B, Part C, and the display choice unchanged.
 
 Song Settings updates the existing id with `saveSong`. The write keeps the id, the schema version, the source filename, the original MIDI, and interpretation fields the form does not edit, including `sustainedNotes`, `writtenDurations`, and `graceNotes`. It does not insert a second Song, and it does not change any other Song.
 
@@ -216,11 +216,11 @@ There is still no general file-picker import and no portable Song file.
 
 **Create.** The application builds one Song. Part A receives the title, composer, source filename, and PDF filename. Part B receives the parsed MIDI. Part C starts empty. The Song is inserted into `songs`. This is implemented for a missing project Song.
 
-**Read.** The library loads the stored Songs into a vertical list. Choosing one calls `getSong` and loads that record into the PDF and the SVG measures. Song Settings, the storage facts, and the text note panel still receive the same record, and they stay hidden. A reload returns to Choose a Song and does not parse the MIDI again. This is implemented.
+**Read.** The library loads the stored Songs into a vertical list. Choosing one calls `getSong` and loads that record into the PDF and the SVG measures. The musical settings and the storage facts receive the same record. The musical settings are shown beneath the display controls. Song Storage — IndexedDB follows them, and Edit Names is the last control in the panel. Edit Names is a right-panel subpage for the title and composer. The PDF and the SVG score stay mounted while that subpage is open. A reload returns to Choose a Song and does not parse the MIDI again. This is implemented.
 
 **Interpret.** Song Settings can change the composition-wide fields of the selected Song and save them. A confirmed written spelling can also be stored in Part C, as Song B’s D4 is. The Music Editor, for individual notes and ties, is not implemented. Measure boundaries are derived for drawing. They are not stored as a list of ticks.
 
-**Render.** The text panel reads stored notes inside a temporary tick window. The SVG experiment reads the same Song and draws the measures chosen in Sheet Music Display. It does not open the MIDI file, and it does not store the picture.
+**Render.** The SVG experiment reads the same Song and draws the measures chosen in Sheet Music Display. It does not open the MIDI file, and it does not store the picture. The temporary text list of notes has been removed.
 
 ## 5. Song Settings and the Music Editor
 
@@ -228,17 +228,15 @@ These are two interfaces. They edit the same Song. They do different jobs.
 
 ### Song Settings
 
-Song Settings prepares a newly imported composition, and it stays available in the code. It is implemented. The form is hidden in this step of the editor. Choosing a Song still fills it, and saving it still writes only that Song. The right panel does not show the form yet.
+Song Settings prepares a newly imported composition, and it stays available in the code. It is implemented. Edit Mode shows the musical fields beneath the display controls. Choosing a Song fills them, and saving them still writes only that Song. Choose a Song hides the form. The title and composer are edited on Edit Names, not in this form.
 
-- Song title
-- Composer
 - Time signature
 - Key signature
 - Pickup, yes or no
 - Pickup duration, when the pickup is yes
 - Ticks per written quarter
 
-Save Changes validates the form, writes that Song’s Part A and Part C, reads the Song back, and redraws the page. No restart is required. A reload restores the saved choices for each Song separately. The original MIDI is checked and left unchanged.
+Save Changes on the musical form validates those fields, writes Part C, reads the Song back, and redraws the page. It keeps the title and composer already stored on the Song. Save Changes on Edit Names writes the title and composer in Part A and leaves Part B, Part C, and the display choice as they are. No restart is required. A reload restores the saved choices for each Song separately. The original MIDI is checked and left unchanged. The displayed title is not the Song id.
 
 ### Music Editor
 
@@ -478,7 +476,7 @@ It does not decide where that measure sits on the page, which row it belongs to,
 |---|---:|---|
 | Left | 1200px | The original PDF, with a 12px margin and no outer panel scrollbar |
 | Center | 1200px | The generated measure divs |
-| Right | 800px | The midGard Sheet Music Editor, centered. Choose a Song, or the title of the open Song and Change song. In Edit Mode, Measures per row and Measures to display share one row |
+| Right | 800px | The midGard Sheet Music Editor, centered. Choose a Song, Edit Mode, or Edit Names. In Edit Mode, Measures per row and Measures to display share one row |
 
 The center and the right panel scroll vertically on their own. The workspace itself scrolls horizontally when the window is narrower than 3200 pixels. The three panels keep those widths.
 
@@ -491,7 +489,7 @@ grid-template-columns: repeat(3, minmax(0, 1fr));
 
 Each measure div occupies one cell and is centered in that cell. The SVG inside keeps its natural width and height. A narrow measure is not stretched. Grid gaps and padding are page spacing. They are not musical spacing.
 
-The song list is ordinary HTML. Its layout does not interpret the music. Song Settings remains in the page, hidden, and its fields still use CSS Grid.
+The song list is ordinary HTML. Its layout does not interpret the music. In Edit Mode the order is the display controls, the musical settings, Song Storage — IndexedDB, then Edit Names. The musical fields still use CSS Grid. Choose a Song hides those sections and clears the PDF and the SVG score. Edit Names replaces only the contents of the right panel with the title and composer. The three columns stay in place, and returning does not reload the PDF or redraw the score.
 
 **Not implemented.** A layout manager that plans systems, page breaks, and pagination, as a stage separate from both CSS and engraving, is still ahead. The CSS Grid above places the experiment. It is not that future manager.
 
@@ -657,7 +655,7 @@ These spans are what the saved settings produce. They are not constants inside t
 
 ### The old nine-note window
 
-The text panel still shows notes that start at tick 0 up to, but not including, tick 2000. That window is a temporary development view in `src/main.ts`. It is not a saved measure, and it is not one bar. For Song A it mixes the pickup with part of Bar 1. For Song B a full bar is 1152 ticks when the written quarter is 384, so the same window is simply a slice of ticks.
+The page used to list notes that start at tick 0 up to, but not including, tick 2000. That list has been removed. The notes themselves remain in Part B. The window was never a saved measure, and it was never one bar. For Song A it mixes the pickup with part of Bar 1. For Song B a full bar is 1152 ticks when the written quarter is 384, so the same window is simply a slice of ticks.
 
 For Song A the notes in that window are:
 
@@ -673,7 +671,7 @@ For Song A the notes in that window are:
 | 52 | E3 | 1333 | 1999 | 3 |
 | 64 | E4 | 1333 | 1999 | 3 |
 
-Notes that start on the same tick sound together. At tick 1333 the right hand starts D4, G♯4, and B4, and the left hand starts E3 and E4. The text panel writes those groups as `[D4 G#4 B4]` and `[E3 E4]`. At tick 667, C♯5 and E2 start together in different hands. They are simultaneous. They are not one single-hand chord. Each of these notes has velocity 70.
+Notes that start on the same tick sound together. At tick 1333 the right hand starts D4, G♯4, and B4, and the left hand starts E3 and E4. At tick 667, C♯5 and E2 start together in different hands. They are simultaneous. They are not one single-hand chord. Each of these notes has velocity 70.
 
 The parser was right to report E4 from tick 0 to tick 667. The early mistake was to call the window that starts at tick 0 the first full measure. The pickup is an interpretation in Part C. The imported ticks stay in Part B.
 
@@ -887,7 +885,6 @@ Implemented:
 - Three measure divs per row, each SVG at its natural size
 - The Standard MIDI parser in `src/midi/`
 - A terminal command that prints the notes starting in ticks 0–2000
-- That same temporary slice on the page, grouped by the stored track names when those names match
 - The PDF for the selected Song, in the left panel
 - IndexedDB database `midgard-sheet-music`, version 1, with one `songs` store
 - Import of Song A and Song B when each id is absent, without rewriting a Song that already exists
