@@ -62,6 +62,9 @@ if (page.includes('id="measure-1"') || page.includes('temporary development view
 if (page.includes('Composition-wide information for this Song')) {
   fail('The old Song Settings introduction is still in the main editor.')
 }
+if (page.includes('>Musical settings<')) {
+  fail('The Musical settings heading is still in the panel.')
+}
 if (!page.includes('>Edit Names<') || !page.includes('id="names-return"')) {
   fail('Edit Names is missing from the page.')
 }

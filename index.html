@@ -28,9 +28,10 @@
         <button class="editor__change" id="change-song" type="button" hidden>Change song</button>
       </header>
       <ul class="editor__list" id="song-choices" aria-labelledby="editor-heading"></ul>
+      <div class="editor-controls">
       <section class="editor-display" id="editor-display" hidden>
         <form class="editor-display__form" id="sheet-display-form">
-          <fieldset class="editor-display__group">
+          <fieldset class="editor-display__group editor-display__group--row">
             <legend class="editor-display__legend" id="display-row-label">Measures per row</legend>
             <div class="editor-display__segment">
               <label class="editor-display__segment-choice">
@@ -43,7 +44,7 @@
               </label>
             </div>
           </fieldset>
-          <fieldset class="editor-display__group">
+          <fieldset class="editor-display__group editor-display__group--count">
             <legend class="editor-display__legend" id="display-measures-label">Measures to display</legend>
             <select id="display-measures" name="measures" aria-labelledby="display-measures-label">
               <option value="1">1</option>
@@ -71,10 +72,9 @@
       </section>
       <section class="settings" aria-label="Musical settings" hidden>
         <form class="settings__form" id="song-settings-form">
-          <fieldset class="settings__group">
-            <legend class="settings__legend">Musical settings</legend>
-            <div class="settings__field">
-              <span id="time-signature-label">Time signature</span>
+          <div class="settings__fields">
+            <div class="settings__field settings__time-field">
+              <span class="settings__label" id="time-signature-label">Time signature</span>
               <span class="settings__time">
                 <input
                   id="song-numerator"
@@ -103,10 +103,6 @@
                 </select>
               </span>
             </div>
-            <label class="settings__field" for="song-key">
-              Key signature
-              <select id="song-key" name="key"></select>
-            </label>
             <fieldset class="settings__group settings__pickup">
               <legend class="settings__legend">Pickup (anacrusis)</legend>
               <div class="settings__choices">
@@ -120,8 +116,8 @@
                 </label>
               </div>
             </fieldset>
-            <label class="settings__field" for="song-ticks-per-quarter">
-              Ticks per written quarter
+            <label class="settings__field settings__ticks" for="song-ticks-per-quarter">
+              <span class="settings__label">Ticks per written quarter</span>
               <input
                 id="song-ticks-per-quarter"
                 name="ticksPerQuarter"
@@ -134,8 +130,8 @@
                 you choose a value. The file’s PPQ is not used automatically.
               </span>
             </label>
-            <label class="settings__field" for="song-pickup-duration" data-pickup-duration hidden>
-              Pickup duration
+            <label class="settings__field settings__duration" for="song-pickup-duration" data-pickup-duration hidden>
+              <span class="settings__label">Pickup duration</span>
               <select id="song-pickup-duration" name="pickupDuration">
                 <option value="">Choose a note value</option>
                 <option value="sixteenth">Sixteenth note</option>
@@ -144,11 +140,18 @@
                 <option value="half">Half note</option>
               </select>
             </label>
-          </fieldset>
-          <button class="settings__save" type="submit">Save Changes</button>
+            <div class="settings__bottom">
+              <label class="settings__field settings__key" for="song-key">
+                <span class="settings__label">Key signature</span>
+                <select id="song-key" name="key"></select>
+              </label>
+              <button class="settings__save settings__commit" type="submit">Save Changes</button>
+            </div>
+          </div>
           <p class="settings__status" id="song-settings-status" role="status" aria-live="polite"></p>
         </form>
       </section>
+      </div>
       <section class="storage" id="song-storage" aria-label="Song storage" hidden></section>
       <button class="settings__save editor__names" id="edit-names" type="button" hidden>Edit Names</button>
       <section class="names" id="names-page" aria-labelledby="names-heading" hidden>

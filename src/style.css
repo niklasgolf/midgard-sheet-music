@@ -214,24 +214,60 @@ body {
   background: #f4e4cf;
 }
 
-.editor-display {
-  margin-top: 32px;
-}
-
-.editor-display[hidden] {
+.editor-controls {
   display: none;
 }
 
-.editor-display__form {
+.editor-controls:has(#editor-display:not([hidden])) {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px 28px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-areas:
+    'row count time'
+    'pickup ticks duration'
+    'bottom bottom bottom'
+    'display-status display-status display-status'
+    'settings-status settings-status settings-status';
+  gap: 18px 20px;
   align-items: start;
+  margin-top: 24px;
 }
 
-.editor-display__form > .settings__status {
-  grid-column: 1 / -1;
-  margin-top: 0;
+.editor-display,
+.editor-display__form,
+.settings,
+.settings__form,
+.settings__fields {
+  display: contents;
+}
+
+.editor-display[hidden],
+.settings[hidden] {
+  display: none;
+}
+
+.editor-display__group--row {
+  grid-area: row;
+}
+
+.editor-display__group--count {
+  grid-area: count;
+}
+
+.editor-controls .settings__status {
+  margin: 0;
+  min-height: 0;
+}
+
+.editor-controls .settings__status:not(:empty) {
+  min-height: 1.5em;
+}
+
+#sheet-display-status {
+  grid-area: display-status;
+}
+
+#song-settings-status {
+  grid-area: settings-status;
 }
 
 .editor-display__group {
@@ -242,18 +278,32 @@ body {
 }
 
 @media (max-width: 720px) {
-  .editor-display__form {
+  .editor-controls:has(#editor-display:not([hidden])) {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'row'
+      'count'
+      'time'
+      'pickup'
+      'ticks'
+      'duration'
+      'bottom'
+      'display-status'
+      'settings-status';
   }
 }
 
-.editor-display__legend {
-  margin: 0 0 10px;
+.editor-display__legend,
+.settings__label,
+.editor-controls .settings__legend {
+  margin: 0 0 8px;
   padding: 0;
   color: #2a1a0e;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 600;
+  letter-spacing: 0;
   line-height: 1.3;
+  text-transform: none;
 }
 
 .editor-display__segment {
@@ -301,7 +351,7 @@ body {
 .editor-display select,
 .editor-display__custom input {
   width: 100%;
-  max-width: 16rem;
+  max-width: none;
   color: #2a1a0e;
   font: inherit;
   background: #f4e4cf;
@@ -410,10 +460,47 @@ body {
   color: #2a1a0e;
 }
 
-.settings {
-  margin-top: 48px;
-  padding-top: 28px;
-  border-top: 1px solid #7a4e2d;
+.settings__time-field {
+  grid-area: time;
+  min-width: 0;
+}
+
+.settings__pickup {
+  grid-area: pickup;
+}
+
+.settings__ticks {
+  grid-area: ticks;
+  min-width: 0;
+}
+
+.settings__duration {
+  grid-area: duration;
+  min-width: 0;
+}
+
+.settings__bottom {
+  grid-area: bottom;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 20px;
+  align-items: end;
+}
+
+.settings__key {
+  min-width: 0;
+}
+
+.settings__commit {
+  justify-self: end;
+  width: auto;
+}
+
+@media (max-width: 720px) {
+  .settings__bottom {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 18px;
+  }
 }
 
 .settings__title {
@@ -429,36 +516,19 @@ body {
   color: #4a3120;
 }
 
-.settings__form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-content: start;
-  max-width: none;
-}
-
 .settings__group {
-  margin: 0 0 18px;
+  margin: 0;
   padding: 0;
   border: 0;
   min-inline-size: 0;
 }
 
-.settings__legend {
-  margin: 0 0 10px;
-  padding: 0;
-  color: #7a4e2d;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  line-height: 1.4;
-  text-transform: uppercase;
-}
-
 .settings__field {
   display: grid;
   gap: 4px;
-  margin: 0 0 12px;
+  margin: 0;
   color: #2a1a0e;
+  min-width: 0;
 }
 
 .settings__field[hidden] {
@@ -494,7 +564,7 @@ body {
 }
 
 .settings__pickup {
-  margin-bottom: 12px;
+  margin: 0;
 }
 
 .settings__choices {
@@ -540,8 +610,9 @@ body {
 
 .settings__hint {
   color: #4a3120;
-  font-size: 14px;
-  line-height: 1.4;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.35;
 }
 
 .engraving {
@@ -703,10 +774,6 @@ body {
 
   .storage__facts dd {
     margin-bottom: 10px;
-  }
-
-  .settings {
-    margin-top: 32px;
   }
 
   .settings__title {
