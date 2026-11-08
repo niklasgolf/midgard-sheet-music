@@ -342,12 +342,17 @@ body {
   align-items: start;
 }
 
+.engraving__grid[data-columns='2'] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .engraving__item {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  justify-items: center;
+  justify-items: safe center;
   align-content: start;
   min-width: 0;
+  overflow-x: auto;
 }
 
 .engraving__caution {
@@ -401,7 +406,7 @@ body {
   box-sizing: border-box;
   width: max-content;
   max-width: none;
-  justify-self: center;
+  justify-self: safe center;
   margin: 0;
   padding: 8px 4px 0;
   border: 2px solid #00ff00;

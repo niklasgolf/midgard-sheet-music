@@ -14,6 +14,7 @@ import {
   planSongCFoundation,
   SONG_C_ID,
   SONG_C_MEASURE_COUNT,
+  SONG_C_MEASURES_PER_ROW,
   SONG_C_STAFF_SPLIT_PITCH,
   SONG_C_WRITTEN_START_TICK,
 } from '../src/song/install-song-c.ts'
@@ -28,7 +29,9 @@ import { applySongSettings } from '../src/song/song-settings.ts'
 import {
   completeMeasureRequest,
   DEFAULT_COMPLETE_MEASURES,
+  DEFAULT_MEASURES_PER_ROW,
   isSong,
+  measuresPerRowCount,
   SONG_SCHEMA_VERSION,
   type Song,
 } from '../src/song/song.ts'
@@ -207,8 +210,11 @@ const planned = planSongCFoundation(bare)
 if (planned.action !== 'install') fail('A Song C record without a start tick was not given one.')
 if (planned.song.musicalInterpretation.writtenStartTick !== 2734) fail('The installed start tick is not 2734.')
 if (planned.song.musicalInterpretation.staffSplitPitch !== 60) fail('The installed split pitch is not 60.')
-if (planned.song.display?.measures.kind !== 'count' || planned.song.display.measures.count !== SONG_C_MEASURE_COUNT) {
+if (planned.song.display?.measures?.kind !== 'count' || planned.song.display.measures.count !== SONG_C_MEASURE_COUNT) {
   fail('Song C was not given a display choice of 6 measures.')
+}
+if (planned.song.display.measuresPerRow?.kind !== 'fixed' || planned.song.display.measuresPerRow.count !== SONG_C_MEASURES_PER_ROW) {
+  fail('Song C was not given two measures per row.')
 }
 if (planned.song.musicalInterpretation.pickup?.present !== false) fail('The install changed the saved pickup.')
 if (planned.song.originalMidi !== songCMidi) fail('The install replaced the MIDI object.')
@@ -221,12 +227,13 @@ const conflicted = songFor(
   'Eine kleine Nachtmusik — Intermediate',
   songCMidi,
   { ...songCInterpretation, writtenStartTick: 100, staffSplitPitch: 40 },
-  { measures: { kind: 'count', count: 6 } },
+  { measures: { kind: 'count', count: 6 }, measuresPerRow: { kind: 'fixed', count: 3 } },
 )
 const conflict = planSongCFoundation(conflicted)
 if (conflict.action !== 'conflict') fail('A different written start was overwritten.')
 if (conflicted.musicalInterpretation.writtenStartTick !== 100) fail('The conflicting written start changed.')
 if (conflicted.musicalInterpretation.staffSplitPitch !== 40) fail('The conflicting staff split changed.')
+if (conflicted.display?.measuresPerRow?.count !== 3) fail('A saved row choice was replaced during a conflict.')
 
 const keptDisplay = songFor(
   SONG_C_ID,
@@ -236,9 +243,10 @@ const keptDisplay = songFor(
   { measures: { kind: 'all' } },
 )
 const kept = planSongCFoundation(keptDisplay)
-if (kept.action !== 'install' || kept.song.display?.measures.kind !== 'all') {
+if (kept.action !== 'install' || kept.song.display?.measures?.kind !== 'all') {
   fail('An existing Song C display choice was replaced.')
 }
+if (kept.song.display?.measuresPerRow?.count !== 2) fail('Song C did not gain two measures per row beside its saved count.')
 
 const songBBefore = JSON.stringify(songB)
 const songABefore = JSON.stringify(songA)
@@ -280,9 +288,10 @@ if (!reloaded || !isSong(reloaded)) fail('Song C could not be read back.')
 if (reloaded.musicalInterpretation.writtenStartTick !== 2734 || reloaded.musicalInterpretation.staffSplitPitch !== 60) {
   fail('The reloaded Song C lost its new Part C fields.')
 }
-if (reloaded.display?.measures.kind !== 'count' || reloaded.display.measures.count !== 6) {
+if (reloaded.display?.measures?.kind !== 'count' || reloaded.display.measures.count !== 6) {
   fail('The reloaded Song C lost its display choice.')
 }
+if (reloaded.display.measuresPerRow?.count !== 2) fail('The reloaded Song C lost its row choice.')
 if (reloaded.originalMidi.notes.length !== 872) fail('The reloaded Song C lost notes.')
 if (reloaded.originalMidi.notes.find((note) => note.startTick === 2734) === undefined) {
   fail('The first Song C note moved.')
@@ -301,6 +310,7 @@ if (storedB.musicalInterpretation.writtenDurations?.length !== 1 || storedB.musi
 
 const withChoice = songFor(SONG_C_ID, 'Eine kleine Nachtmusik — Intermediate', songCMidi, songCInterpretation, {
   measures: { kind: 'count', count: 12 },
+  measuresPerRow: { kind: 'fixed', count: 2 },
 })
 const savedSettings = applySongSettings(withChoice, {
   title: withChoice.metadata.title,
@@ -309,29 +319,46 @@ const savedSettings = applySongSettings(withChoice, {
   pickup: songCInterpretation.pickup,
   ticksPerWrittenQuarter: 480,
 })
-if (savedSettings.display?.measures.kind !== 'count' || savedSettings.display.measures.count !== 12) {
+if (savedSettings.display?.measures?.kind !== 'count' || savedSettings.display.measures.count !== 12) {
   fail('Saving Song Settings removed the display choice.')
 }
+if (savedSettings.display.measuresPerRow?.count !== 2) fail('Saving Song Settings removed the row choice.')
 if (savedSettings.musicalInterpretation.writtenStartTick !== 2734 || savedSettings.musicalInterpretation.staffSplitPitch !== 60) {
   fail('Saving Song Settings removed the written start or the staff split.')
 }
 if (savedSettings.originalMidi !== withChoice.originalMidi) fail('Saving Song Settings replaced the MIDI object.')
 
 const otherLibrary = memoryLibrary([
-  songFor(songA.id, 'Prelude', songAMidi, songAInterpretation, { measures: { kind: 'count', count: 6 } }),
-  songFor(SONG_B_ID, 'Prelude B', songBMidi, songBInterpretation, { measures: { kind: 'all' } }),
+  songFor(songA.id, 'Prelude', songAMidi, songAInterpretation, {
+    measures: { kind: 'count', count: 6 },
+    measuresPerRow: { kind: 'fixed', count: 3 },
+  }),
+  songFor(SONG_B_ID, 'Prelude B', songBMidi, songBInterpretation, {
+    measures: { kind: 'all' },
+    measuresPerRow: { kind: 'fixed', count: 3 },
+  }),
   withChoice,
 ])
-if (completeMeasureRequest((await otherLibrary.repository.getSong(songA.id)) as Song) !== 6) {
+const restoredA = (await otherLibrary.repository.getSong(songA.id)) as Song
+const restoredB = (await otherLibrary.repository.getSong(SONG_B_ID)) as Song
+const restoredC = (await otherLibrary.repository.getSong(SONG_C_ID)) as Song
+if (completeMeasureRequest(restoredA) !== 6 || measuresPerRowCount(restoredA) !== 3) {
   fail('Song A’s display choice was not restored.')
 }
-if (completeMeasureRequest((await otherLibrary.repository.getSong(SONG_B_ID)) as Song) !== 'all') {
+if (completeMeasureRequest(restoredB) !== 'all' || measuresPerRowCount(restoredB) !== 3) {
   fail('Song B’s display choice was not restored.')
 }
-if (completeMeasureRequest((await otherLibrary.repository.getSong(SONG_C_ID)) as Song) !== 12) {
+if (completeMeasureRequest(restoredC) !== 12 || measuresPerRowCount(restoredC) !== 2) {
   fail('Song C’s display choice was not restored.')
 }
 if (completeMeasureRequest(songA) !== DEFAULT_COMPLETE_MEASURES) fail('A song with no display choice left the default of 16.')
+if (measuresPerRowCount(songA) !== DEFAULT_MEASURES_PER_ROW || measuresPerRowCount(songB) !== 3) {
+  fail('Songs A and B did not default to 3 measures per row.')
+}
+if (measuresPerRowCount(withChoice) !== 2) fail('Song C’s saved row choice was not 2.')
+if (isSong({ ...songA, display: { measuresPerRow: { kind: 'fixed', count: 4 } } })) {
+  fail('An unsupported row count was accepted.')
+}
 
 const databaseSource = readFileSync('src/song/song-database.ts', 'utf8')
 if (!databaseSource.includes('export const SONG_DATABASE_VERSION = 1')) fail('The database version changed.')

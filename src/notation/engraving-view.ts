@@ -2,7 +2,7 @@ import type { MidiNote } from '../midi/parse-midi.ts'
 import { fractionFromQuarters } from '../interpretation/duration.ts'
 import { buildMeasureContent } from '../interpretation/measure-content.ts'
 import { assignPianoStaffs, type PianoStaff } from '../interpretation/staff.ts'
-import { completeMeasureRequest, type Song, type TimeSignature } from '../song/song.ts'
+import { completeMeasureRequest, measuresPerRowCount, type Song, type TimeSignature } from '../song/song.ts'
 import { displayedMeasures } from './written-measures.ts'
 import { measureSvg } from './piano-measure-svg.ts'
 
@@ -45,6 +45,7 @@ export function renderEngraving(container: HTMLElement, song: Song): void {
 
   const grid = document.createElement('div')
   grid.className = 'engraving__grid'
+  grid.dataset.columns = String(measuresPerRowCount(song))
   for (const measure of plan.measures) {
     grid.append(
       measureBlock(

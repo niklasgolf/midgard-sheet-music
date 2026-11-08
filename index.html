@@ -136,9 +136,9 @@
       </section>
       <section class="settings" aria-labelledby="display-title">
         <h2 class="settings__title" id="display-title">Sheet Music Display</h2>
-        <p class="settings__intro">
-          How many complete measures to draw for this Song. A pickup is shown as well and is not
-          part of the count. The imported MIDI stays complete.
+          <p class="settings__intro">
+          How many complete measures to draw, and how many sit on each row. A pickup is shown as
+          well and is not part of the count. The imported MIDI stays complete.
         </p>
         <form class="settings__form" id="sheet-display-form">
           <fieldset class="settings__group">
@@ -162,6 +162,19 @@
               />
               <span class="settings__hint">A positive whole number of complete measures.</span>
             </label>
+          </fieldset>
+          <fieldset class="settings__group">
+            <legend class="settings__legend" id="display-row-label">Measures per row</legend>
+            <div class="settings__choices">
+              <label class="settings__choice">
+                <input name="measuresPerRow" type="radio" value="2" />
+                2 per row
+              </label>
+              <label class="settings__choice">
+                <input name="measuresPerRow" type="radio" value="3" />
+                3 per row
+              </label>
+            </div>
           </fieldset>
           <p class="settings__status" id="sheet-display-status" role="status" aria-live="polite"></p>
         </form>

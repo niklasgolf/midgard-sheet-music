@@ -127,18 +127,31 @@ export type MusicalInterpretation = {
 /** How many complete written measures the page draws for one Song. A pickup is extra. */
 export type MeasureDisplay = { kind: 'count'; count: number } | { kind: 'all' }
 
+/** Columns of measure SVGs. Later kinds, such as automatic or matching the source, can be added here. */
+export type MeasuresPerRow = { kind: 'fixed'; count: 2 | 3 }
+
 export type SongDisplay = {
-  measures: MeasureDisplay
+  measures?: MeasureDisplay
+  measuresPerRow?: MeasuresPerRow
 }
 
 /** Complete measures drawn when a Song has no saved display choice. A pickup is extra. */
 export const DEFAULT_COMPLETE_MEASURES = 16
+
+/** Measure columns used when a Song has no saved row choice. */
+export const DEFAULT_MEASURES_PER_ROW = 3
 
 export function completeMeasureRequest(song: Song): number | 'all' {
   const measures = song.display?.measures
   if (measures === undefined) return DEFAULT_COMPLETE_MEASURES
   if (measures.kind === 'all') return 'all'
   return measures.count
+}
+
+export function measuresPerRowCount(song: Song): 2 | 3 {
+  const choice = song.display?.measuresPerRow
+  if (choice?.kind === 'fixed') return choice.count
+  return DEFAULT_MEASURES_PER_ROW
 }
 
 export type Song = {
@@ -148,7 +161,7 @@ export type Song = {
   /** Complete result of the MIDI parser, preserved as imported. */
   originalMidi: MidiFile
   musicalInterpretation: MusicalInterpretation
-  /** How many measures to draw. Absent until the display control saves a choice. */
+  /** How many measures to draw, and how many sit on each row. Absent until a display choice is saved. */
   display?: SongDisplay
 }
 
@@ -238,10 +251,23 @@ function isStaffSplitPitch(value: unknown): value is number {
 
 function isDisplay(value: unknown): value is SongDisplay {
   if (value === null || typeof value !== 'object') return false
-  const measures = (value as Partial<SongDisplay>).measures
-  if (measures === undefined || measures === null || typeof measures !== 'object') return false
+  const display = value as Partial<SongDisplay>
+  if (display.measures !== undefined && !isMeasureDisplay(display.measures)) return false
+  if (display.measuresPerRow !== undefined && !isMeasuresPerRow(display.measuresPerRow)) return false
+  return true
+}
+
+function isMeasureDisplay(value: unknown): value is MeasureDisplay {
+  if (value === null || typeof value !== 'object') return false
+  const measures = value as Partial<MeasureDisplay>
   if (measures.kind === 'all') return true
-  return measures.kind === 'count' && Number.isInteger(measures.count) && measures.count >= 1
+  return measures.kind === 'count' && Number.isInteger(measures.count) && measures.count !== undefined && measures.count >= 1
+}
+
+function isMeasuresPerRow(value: unknown): value is MeasuresPerRow {
+  if (value === null || typeof value !== 'object') return false
+  const choice = value as Partial<MeasuresPerRow>
+  return choice.kind === 'fixed' && (choice.count === 2 || choice.count === 3)
 }
 
 function isSustainedNotes(value: unknown): value is readonly SustainedNoteReading[] {

@@ -1,6 +1,12 @@
 import { availableCompleteMeasures } from '../notation/written-measures.ts'
 import type { SongRepository } from './song-repository.ts'
-import { completeMeasureRequest, DEFAULT_COMPLETE_MEASURES, type MeasureDisplay, type Song } from './song.ts'
+import {
+  completeMeasureRequest,
+  DEFAULT_COMPLETE_MEASURES,
+  measuresPerRowCount,
+  type Song,
+  type SongDisplay,
+} from './song.ts'
 
 export type SheetDisplayController = {
   show(song: Song): void
@@ -15,7 +21,8 @@ export function mountSheetDisplay(
   const measures = requiredField<HTMLSelectElement>(form, 'measures')
   const customCount = requiredField<HTMLInputElement>(form, 'customCount')
   const customField = form.querySelector<HTMLElement>('[data-custom-count]')
-  if (!customField) throw new Error('Sheet Music Display controls were not found')
+  const rowRadios = [...form.querySelectorAll<HTMLInputElement>('input[name="measuresPerRow"]')]
+  if (!customField || rowRadios.length !== 2) throw new Error('Sheet Music Display controls were not found')
 
   let current: Song | undefined
   let filling = false
@@ -28,13 +35,13 @@ export function mountSheetDisplay(
     if (filling) return
     customField.hidden = measures.value !== 'custom'
     if (measures.value === '6' || measures.value === '12') {
-      void persist(form, status, repository, () => current, { kind: 'count', count: Number(measures.value) }, onSaved, (song) => {
+      void persist(form, status, repository, () => current, { measures: { kind: 'count', count: Number(measures.value) } }, onSaved, (song) => {
         current = song
       })
       return
     }
     if (measures.value === 'all') {
-      void persist(form, status, repository, () => current, { kind: 'all' }, onSaved, (song) => {
+      void persist(form, status, repository, () => current, { measures: { kind: 'all' } }, onSaved, (song) => {
         current = song
       })
       return
@@ -44,7 +51,7 @@ export function mountSheetDisplay(
       writeStatus(status, 'Enter a positive whole number of measures.', true)
       return
     }
-    void persist(form, status, repository, () => current, { kind: 'count', count: parsed.value }, onSaved, (song) => {
+    void persist(form, status, repository, () => current, { measures: { kind: 'count', count: parsed.value } }, onSaved, (song) => {
       current = song
     })
   })
@@ -56,10 +63,29 @@ export function mountSheetDisplay(
       writeStatus(status, 'Enter a positive whole number of measures.', true)
       return
     }
-    void persist(form, status, repository, () => current, { kind: 'count', count: parsed.value }, onSaved, (song) => {
+    void persist(form, status, repository, () => current, { measures: { kind: 'count', count: parsed.value } }, onSaved, (song) => {
       current = song
     })
   })
+
+  for (const radio of rowRadios) {
+    radio.addEventListener('change', () => {
+      if (filling || !radio.checked) return
+      const count = radio.value === '2' ? 2 : radio.value === '3' ? 3 : undefined
+      if (count === undefined) return
+      void persist(
+        form,
+        status,
+        repository,
+        () => current,
+        { measuresPerRow: { kind: 'fixed', count } },
+        onSaved,
+        (song) => {
+          current = song
+        },
+      )
+    })
+  }
 
   return {
     show(song) {
@@ -83,6 +109,8 @@ export function mountSheetDisplay(
         customCount.value = String(choice.count)
         customField.hidden = false
       }
+      const perRow = String(measuresPerRowCount(song))
+      for (const radio of rowRadios) radio.checked = radio.value === perRow
       filling = false
       writeClamp(status, song)
     },
@@ -102,7 +130,7 @@ async function persist(
   status: HTMLElement,
   repository: SongRepository,
   readCurrent: () => Song | undefined,
-  measures: MeasureDisplay,
+  patch: SongDisplay,
   onSaved: (song: Song) => void,
   remember: (song: Song) => void,
 ): Promise<void> {
@@ -113,7 +141,7 @@ async function persist(
   }
   form.setAttribute('aria-busy', 'true')
   try {
-    const next: Song = { ...song, display: { measures } }
+    const next: Song = { ...song, display: { ...song.display, ...patch } }
     await repository.saveSong(next)
     const stored = await repository.getSong(song.id)
     if (!stored) throw new Error('The display choice was saved but the Song could not be read back.')

@@ -11,6 +11,9 @@ export const SONG_C_STAFF_SPLIT_PITCH = 60
 
 export const SONG_C_MEASURE_COUNT = 6
 
+/** Song C's first row choice. A saved choice is left alone. */
+export const SONG_C_MEASURES_PER_ROW = 2
+
 export type SongCInstall =
   | { status: 'absent' }
   | { status: 'unchanged' }
@@ -78,7 +81,13 @@ export function planSongCFoundation(song: Song):
   }
 
   if (display === undefined) {
-    display = { measures: { kind: 'count', count: SONG_C_MEASURE_COUNT } }
+    display = {
+      measures: { kind: 'count', count: SONG_C_MEASURE_COUNT },
+      measuresPerRow: { kind: 'fixed', count: SONG_C_MEASURES_PER_ROW },
+    }
+    changed = true
+  } else if (display.measuresPerRow === undefined) {
+    display = { ...display, measuresPerRow: { kind: 'fixed', count: SONG_C_MEASURES_PER_ROW } }
     changed = true
   }
 
