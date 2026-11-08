@@ -363,7 +363,7 @@ Inside the SVG, CSS Grid has no role. Note positions come from SVG coordinates a
 
 Musical rendering does not use HTML Canvas, rasterized musical symbols, PNG or JPEG noteheads, HTML elements positioned to imitate symbols, or any renderer that requires Canvas. The finished traditional engine does not depend on VexFlow’s Canvas renderer.
 
-The experiment now draws staff lines, a right barline, ledger lines, filled elliptical noteheads, stems, one augmentation dot when the written duration has a dot, ties from a stored spelling, and a grace note when Part C stores one. A grace note is a smaller filled notehead, about two-thirds of a normal head, with a shorter stem, the flag that belongs to its ornamental value, a slash only when the reading asks for one, and a short slur when the reading asks for one. Clefs, beams, ordinary flags, rests, accidentals, and music-font glyphs are not drawn yet. An unresolved note uses the same ellipse in Deep Crimson, `#742D38`, without a stem or a dot. That color means the interpretation is unfinished. It does not mean the MIDI note is wrong.
+The experiment now draws staff lines, a right barline, ledger lines, filled elliptical noteheads, stems, one augmentation dot when the written duration has a dot, ties from a stored spelling, beams for eighths and sixteenths that share a beat, and a grace note when Part C stores one. A grace note is a smaller filled notehead, about two-thirds of a normal head, with a shorter stem, the flag that belongs to its ornamental value, a slash only when the reading asks for one, and a short slur when the reading asks for one. Clefs, ordinary flags on unbeamed notes, rests, accidentals, and music-font glyphs are not drawn yet. An unresolved note uses the same ellipse in Deep Crimson, `#742D38`, without a stem or a dot. That color means the interpretation is unfinished. It does not mean the MIDI note is wrong.
 
 ### Glyphs, fonts, and export
 
@@ -402,7 +402,7 @@ The current modules interpret a written duration, assign the first note-bearing 
 | Rhythmic spacing | Horizontal room from the written values in the measure | Implemented |
 | Unresolved notes | A crimson notehead at the real onset, with no invented duration | Implemented |
 | Clefs, key signatures, time signatures | The symbols at the start of a staff | Not implemented |
-| Flags and beams | How short notes are grouped | A grace note draws its own small flag. Ordinary flags and beams are not drawn |
+| Flags and beams | How short notes are grouped | Eighths and sixteenths that share a beat are beamed. A grace note still draws its own small flag. Ordinary flags on unbeamed notes are not drawn |
 | Rests and accidentals | Silence, and the printed spelling | Not implemented |
 | Ties and slurs | Connections between notes, including connections that leave the measure | Ties are drawn. A grace slur stays inside its measure. Phrase slurs are not drawn |
 | Dynamics, articulations, fingering | Marks that are musical data and also typography | Not implemented |
@@ -567,7 +567,7 @@ Layer 1 is the parser. Layer 2 is the authoritative musical store. Layer 3 only 
 
 3A is conventional Western notation: staves, clefs, noteheads, stems, beams, rests, barlines, and the other familiar symbols. A pianist who knows ordinary notation should be able to read it.
 
-3A uses our own SVG engraving engine, with one SVG per measure. The experiment has started that engine: staves, noteheads, ledger lines, stems, dots, chord placement, rhythmic spacing, unresolved notes, and Split Tie segments for a spelling stored in Part C. It has not finished it. Clefs, beams, rests, and accidentals are still absent.
+3A uses our own SVG engraving engine, with one SVG per measure. The experiment has started that engine: staves, noteheads, ledger lines, stems, dots, chord placement, rhythmic spacing, unresolved notes, beams, and Split Tie segments for a spelling stored in Part C. It has not finished it. Clefs, rests, and accidentals are still absent.
 
 ### 3B — midGard Sheet Music
 
@@ -771,15 +771,37 @@ The grace note stays attached to the first half, because that written note still
 
 In Bar 16 the second half joins the C♯5 and A5 halves that already begin at tick 17664. With the bass A3 and E4, that downbeat has five noteheads. The original MIDI event remains one note from 16896 to 18432.
 
-The half notes are still drawn with the engine’s filled notehead. Open half-note heads, and the separate stem directions printed for A4 and the notes above it, are not part of this spelling. Beams, the long phrase slur, hairpins, and fingerings are still absent. Bars 15 and 16 can be compared with the PDF for these A4s. They are not yet a complete engraving of those bars.
+The half notes are still drawn with the engine’s filled notehead. Open half-note heads, and the separate stem directions printed for A4 and the notes above it, are not part of this spelling. The dotted eighth and sixteenth at the start of Bar 15 are beamed. The long phrase slur, hairpins, and fingerings are still absent. Bars 15 and 16 can be compared with the PDF for these A4s. They are not yet a complete engraving of those bars.
 
-## 15. The SVG experiment
+## 15. Beams
+
+A beam groups short written notes. It is not a tie, and it is not stored in Part C. The written durations and the time signature already say which notes belong together. Song B needs no new interpretation for its beams.
+
+Grouping and engraving stay separate. `src/interpretation/beam-group.ts` names the groups. `src/engraving/beam.ts` turns a group of two events into stem extensions and polygon points. The measure SVG draws those points. Neither module stores pixels in the Song.
+
+**Beam level.** An eighth, dotted or not, takes one beam. A sixteenth takes two. A dot does not add a level. A quarter, half, or whole note is not beamed. The level comes from the written duration. Bar 5’s D4 sounds much longer than a sixteenth, and Bar 15’s A4 sounds only 52 ticks, but each is written as a sixteenth, so each takes the second beam.
+
+**Beat.** In 3/4 and 4/4 a group stays inside one quarter. In 6/8 it stays inside a dotted quarter. A shorter beat groups notes in twos, or in threes when the numerator is a multiple of three. The group also stays on one staff and one stem direction. A note at the same onset with a different duration, such as Bar 9’s G♯4 quarter beside the dotted eighth, is a separate event and stays out. Grace notes are not rhythmic events, so they stay out. The caller passes one measure, so a beam cannot cross a barline. A group of one note is discarded.
+
+**Primary beam.** For a group of two, the slope is half the slope between the natural stem tips, and it is never steeper than 0.25. The line then moves outward until both stems can meet it without growing shorter. Upward stems carry the beam above the notes. Downward stems carry it below. The thickness is half a staff space. The shape is a filled four-point polygon. Each stem is lengthened through the existing stem extension until its free end meets the outer edge of that polygon. The notehead does not move, and the column spacing does not change.
+
+**Secondary beam.** Two sixteenths take a second polygon parallel to the first, 1.5 thicknesses closer to the notes. A sixteenth beside an eighth takes only a short beamlet, about one staff space long, on the sixteenth and pointing back toward the eighth. The dotted eighth does not receive that beamlet.
+
+**Chords.** Notes that already share a staff, an onset, and a written duration are one event with one stem. The beam joins those stems. It does not add a stem for each pitch.
+
+**This piece.** Song B’s Bars 1, 3, 5, 7, 9, 11, 13, and 15 each contain one such group: a dotted eighth and a sixteenth on the first beat of the treble staff. Bars 1 and 9 are single notes, stemmed down. Bars 3, 11, and 13 are chords, stemmed down. Bars 5, 7, and 15 are chords, stemmed up. The other measures, including the pickup, have no eighth or sixteenth and stay unbeamed. The rule is the duration and the beat, not the bar number.
+
+Bar 5’s D4 tie and Bar 11’s C♯5 and E5 ties still leave the noteheads. The beam meets the stem. Bar 15’s grace note and its slur stay beside the principal half note, and the A4 Split Tie between Bars 15 and 16 is unchanged.
+
+The drawing currently accepts two events. A longer group is still identified, and it is not yet drawn. Rests, tuplets, beams across a barline, and an explicit voice identity are not part of this step. An unbeamed eighth still has a stem and no flag.
+
+## 16. The SVG experiment
 
 Under the heading **Traditional Sheet Music — SVG Experiment**, the page draws seventeen measures when Song Settings has a time signature, a pickup of a written duration, and ticks per written quarter. If any of those is missing, or if the pickup is explicitly absent, the section says so and draws no measures. It does not silently use PPQ.
 
 Each measure is one div and one SVG. The grid places three measures on each row. The SVG keeps the size the engraving calculated.
 
-For the selected Song, a recognized note is drawn with its notehead, its ledger lines, its stem when the duration has one, and its dot when the duration has one. An unresolved note is drawn as a crimson notehead at its real onset. The warning under the measure lists the track, pitch, onset, duration, and the reason. The original MIDI is not changed.
+For the selected Song, a recognized note is drawn with its notehead, its ledger lines, its stem when the duration has one, and its dot when the duration has one. Eighths and sixteenths that share a beat also receive a beam, inside that measure’s SVG. An unresolved note is drawn as a crimson notehead at its real onset. The warning under the measure lists the track, pitch, onset, duration, and the reason. The original MIDI is not changed.
 
 The hand on the staff comes from track order, as section 9 describes. The measures read `originalMidi` and `musicalInterpretation` from the stored Song. Switching Songs redraws the PDF, the measures, and the settings from that Song alone.
 
@@ -787,7 +809,7 @@ The experiment does not yet draw:
 
 - Clef symbols
 - Noteheads from a music font
-- Ordinary flags or beams
+- Ordinary flags on notes that are not beamed
 - Rests
 - Accidentals
 - Key or time signatures on the staff
@@ -796,15 +818,15 @@ The experiment does not yet draw:
 
 A tie is drawn when Part C spells the MIDI sound as written notes. A grace note is drawn when Part C stores one, including its short slur. The long phrase slur in the Chopin PDF is neither of those marks, and it is not drawn.
 
-## 16. Where the engraving stands
+## 17. Where the engraving stands
 
 The first engraving target was a professionally readable Bar 0 and Bar 1. The experiment has since been widened to seventeen measures for whichever Song is selected. That widening did not delete or shorten either Song. Song A’s 176 notes and Song B’s 168 notes remain in IndexedDB.
 
 The engine stays general. Another Song, or a later measure, must be drawable without a new piece of Chopin-specific drawing code. The Bar 5 reading is a musical conclusion stored on Song B. The renderer does not contain that Song’s id.
 
-Clefs, beams, rests, accidentals, and music-font glyphs remain. Song B’s Bar 11 spellings, Bar 15 sixteenth and grace note, and the tied A4 halves in Bars 15 and 16 are stored.
+Clefs, rests, accidentals, and music-font glyphs remain. Beams are drawn from the written durations. Song B’s Bar 11 spellings, Bar 15 sixteenth and grace note, and the tied A4 halves in Bars 15 and 16 are stored.
 
-## 17. What works today, and what does not
+## 18. What works today, and what does not
 
 Implemented:
 
@@ -821,7 +843,7 @@ Implemented:
 - A storage status panel whose facts come from the selected Song, including PPQ, tempo, and the file’s time signature as separate facts from the saved written quarter
 - Song Settings, saved into that Song only
 - Seventeen measure SVGs when the selected Song has a time signature, a pickup duration, and ticks per written quarter
-- Staff lines, barline, ledger lines, noteheads, chord offsets, stems, augmentation dots, and rhythmic spacing
+- Staff lines, barline, ledger lines, noteheads, chord offsets, stems, augmentation dots, rhythmic spacing, and beams for eighths and sixteenths that share a beat
 - Unresolved notes in Deep Crimson, with the original duration left unchanged
 - `SongRepository`, with IndexedDB as its current implementation
 - A written spelling of one MIDI sound in Part C, and the Split Tie segments drawn from that spelling
@@ -846,7 +868,7 @@ Not implemented:
 - A general MIDI file picker
 - The Music Editor
 - Stored measure boundaries, voices, rests, and enharmonic spelling
-- Clefs, music-font glyphs, ordinary flags, beams, rests, accidentals, and key or time signatures on the staff
+- Clefs, music-font glyphs, ordinary flags on unbeamed notes, rests, accidentals, and key or time signatures on the staff
 - A layout manager for systems, page breaks, and pagination, beyond the current CSS Grid
 - Drawing a phrase slur, or any other non-tie symbol that crosses measure SVGs
 - Convex, or any database other than IndexedDB
@@ -854,7 +876,7 @@ Not implemented:
 - midGard notation, 3B
 - Playback and a portable Song file
 
-## 18. Architectural principles
+## 19. Architectural principles
 
 1. One Song is one complete musical document in IndexedDB.
 2. A measure is a graphical unit rendered from part of a Song, not a separate database record.
@@ -878,11 +900,11 @@ Not implemented:
 
 We compare an interpretation with the original PDF before treating it as settled. We do not add a dependency or an abstraction until it has a clear job.
 
-## 19. What comes next
+## 20. What comes next
 
 The early investigation of VexFlow, the Song model, and the first SVG has already been carried into the experiment described above. This README is not a numbered build plan.
 
-Song B’s Bar 5 D4 is stored as three written notes and drawn with a Split Tie. Song B’s Bar 11 C♯5 and E5 are stored as a sixteenth tied to a quarter, followed by a repeated quarter, with the two ties on opposite sides of the chord. Song B’s Bar 15 writes the 52-tick A4 as a sixteenth and the 44-tick A4 as one unslashed grace note. The 1536-tick A4 is stored as two tied half notes, with the Split Tie divided between Bar 15 and Bar 16. Beams, phrase slurs, hairpins, and fingerings are not part of this step. The database remains IndexedDB until a complete composition can be rendered. Convex is the planned replacement, behind `SongRepository`, and it is not part of the current code.
+Song B’s Bar 5 D4 is stored as three written notes and drawn with a Split Tie. Song B’s Bar 11 C♯5 and E5 are stored as a sixteenth tied to a quarter, followed by a repeated quarter, with the two ties on opposite sides of the chord. Song B’s Bar 15 writes the 52-tick A4 as a sixteenth and the 44-tick A4 as one unslashed grace note. The 1536-tick A4 is stored as two tied half notes, with the Split Tie divided between Bar 15 and Bar 16. Eighths and sixteenths that share a beat are drawn with a beam. Phrase slurs, hairpins, and fingerings are not part of this step. The database remains IndexedDB until a complete composition can be rendered. Convex is the planned replacement, behind `SongRepository`, and it is not part of the current code.
 
 Each implementation step after that review should be small enough to:
 
@@ -895,7 +917,7 @@ Each implementation step after that review should be small enough to:
 
 The rest of either Song stays intact in IndexedDB while that work is done.
 
-## 20. Open questions
+## 21. Open questions
 
 These questions are deliberately unanswered. A decision elsewhere in this document is not repeated here as if it were still open.
 

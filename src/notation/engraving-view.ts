@@ -1,7 +1,7 @@
 import { fractionFromQuarters } from '../interpretation/duration.ts'
 import { buildMeasureContent } from '../interpretation/measure-content.ts'
 import { assignPianoStaffs, type PianoStaff } from '../interpretation/staff.ts'
-import type { Song } from '../song/song.ts'
+import type { Song, TimeSignature } from '../song/song.ts'
 import { writtenMeasures } from './written-measures.ts'
 import { measureSvg } from './piano-measure-svg.ts'
 
@@ -18,7 +18,8 @@ export function renderEngraving(container: HTMLElement, song: Song): void {
   const interpretation = song.musicalInterpretation
   const plan = writtenMeasures(interpretation, EXPERIMENT_MEASURE_COUNT)
   const ticksPerWrittenQuarter = interpretation.ticksPerWrittenQuarter
-  if (!plan.ready || ticksPerWrittenQuarter === undefined) {
+  const timeSignature = interpretation.timeSignature
+  if (!plan.ready || ticksPerWrittenQuarter === undefined || timeSignature === undefined) {
     const message = document.createElement('p')
     message.className = 'engraving__message'
     message.textContent = plan.ready
@@ -47,6 +48,7 @@ export function renderEngraving(container: HTMLElement, song: Song): void {
         measure.span,
         measure.quarters,
         ticksPerWrittenQuarter,
+        timeSignature,
         staves.staffByTrack,
       ),
     )
@@ -60,6 +62,7 @@ function measureBlock(
   span: { startTick: number; endTick: number },
   spanQuarters: number,
   ticksPerWrittenQuarter: number,
+  timeSignature: TimeSignature,
   staffByTrack: ReadonlyMap<number, PianoStaff>,
 ): HTMLElement {
   const item = document.createElement('div')
@@ -85,7 +88,7 @@ function measureBlock(
   })
   const frame = document.createElement('div')
   frame.className = 'measure'
-  frame.append(measureSvg({ label, content }))
+  frame.append(measureSvg({ label, content, timeSignature }))
   item.append(name, ticks, frame)
   if (content.unresolved.length > 0) item.append(unresolvedWarning(content.unresolved))
   return item

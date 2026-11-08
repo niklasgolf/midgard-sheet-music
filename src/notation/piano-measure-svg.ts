@@ -23,8 +23,11 @@ import {
   graceStem,
   GRACE_SCALE,
 } from '../engraving/grace-note.ts'
-import { appendDot, appendStem, durationHasStem, extentWithDots, placeAugmentationDots, stemGeometry } from '../engraving/symbols.ts'
+import { layoutBeam, type BeamShape } from '../engraving/beam.ts'
+import { appendDot, appendStem, durationHasStem, extentWithDots, placeAugmentationDots, stemGeometry, type StemGeometry } from '../engraving/symbols.ts'
+import { beamEventKey, beamGroups } from '../interpretation/beam-group.ts'
 import { fractionKey } from '../interpretation/duration.ts'
+import type { TimeSignature } from '../song/song.ts'
 import { columnX, spaceColumns, type MeasureSpacing } from '../engraving/spacing.ts'
 import {
   TIE_APPROACH,
@@ -65,6 +68,7 @@ const NOTEHEAD_WIDTH = NOTE_RX * 2
 export function measureSvg(options: {
   label: string
   content: MeasureContent
+  timeSignature?: TimeSignature
 }): SVGSVGElement {
   const placed = options.content.columns.map((column) => placeColumn(column))
   const provisional = options.content.provisional.map((column) => placeProvisional(column))
@@ -116,12 +120,17 @@ export function measureSvg(options: {
   drawStaff(svg, staffLeft, staffRight, frame.bassBottomY)
   drawRightBarline(svg, staffRight, frame.trebleBottomY, frame.bassBottomY)
 
+  const ink: InkEvent[] = []
   for (const column of placed) {
     const anchorX = columnX(spacing, column.onset)
     for (const group of column.events) {
-      drawEvent(svg, frame, group, anchorX)
+      const bottomY = group.event.staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
+      ink.push({ placed: group, anchorX, bottomY })
     }
   }
+  const beams = stemNotes(svg, ink, options.timeSignature)
+  for (const item of ink) drawEvent(svg, frame, item.placed, item.anchorX)
+  for (const beam of beams) appendBeam(svg, beam.shape, beam.staff)
   for (const column of provisional) {
     const anchorX = columnX(spacing, column.onset)
     for (const group of column.events) {
@@ -271,6 +280,101 @@ function drawProvisional(
   }
 }
 
+type InkEvent = {
+  placed: PlacedEvent
+  anchorX: number
+  bottomY: number
+}
+
+function stemNotes(
+  svg: SVGSVGElement,
+  ink: readonly InkEvent[],
+  timeSignature: TimeSignature | undefined,
+): Array<{ shape: BeamShape; staff: string }> {
+  const beamed = new Set<string>()
+  const shapes: Array<{ shape: BeamShape; staff: string }> = []
+  if (timeSignature !== undefined) {
+    const groups = beamGroups({
+      events: ink.map((item) => ({
+        staff: item.placed.event.staff,
+        onset: item.placed.event.onset,
+        duration: item.placed.event.duration,
+        stemDirection: item.placed.direction,
+      })),
+      timeSignature,
+    })
+    for (const group of groups) {
+      const left = group.events[0]
+      const right = group.events[1]
+      if (left === undefined || right === undefined || group.events.length !== 2) continue
+      const first = ink.find((item) => beamEventKey(item.placed.event) === left.key)
+      const second = ink.find((item) => beamEventKey(item.placed.event) === right.key)
+      if (first === undefined || second === undefined) continue
+      if (first.placed.direction !== group.stemDirection || second.placed.direction !== group.stemDirection) continue
+      const leftStem = eventStem(first, 0)
+      const rightStem = eventStem(second, 0)
+      if (leftStem === undefined || rightStem === undefined) continue
+      const layout = layoutBeam({
+        direction: group.stemDirection,
+        stemThickness: leftStem.thickness,
+        ends: [
+          { stemX: leftStem.x, naturalTipY: leftStem.tipY, level: left.level },
+          { stemX: rightStem.x, naturalTipY: rightStem.tipY, level: right.level },
+        ],
+      })
+      drawStem(svg, first, layout.extensions[0])
+      drawStem(svg, second, layout.extensions[1])
+      for (const shape of layout.shapes) shapes.push({ shape, staff: group.staff })
+      beamed.add(left.key)
+      beamed.add(right.key)
+    }
+  }
+  for (const item of ink) {
+    if (beamed.has(beamEventKey(item.placed.event))) continue
+    if (!durationHasStem(item.placed.event.duration.base)) continue
+    drawStem(svg, item, 0)
+  }
+  return shapes
+}
+
+function eventStem(item: InkEvent, extension: number): StemGeometry | undefined {
+  return stemGeometry({
+    direction: item.placed.direction,
+    noteheadRadiusX: NOTE_RX,
+    extension,
+    heads: item.placed.heads.map((head) => ({
+      x: item.anchorX + head.offsetX,
+      y: noteheadY(item.bottomY, head.staffStep),
+      staffStep: head.staffStep,
+      displaced: head.displaced,
+    })),
+  })
+}
+
+function drawStem(svg: SVGSVGElement, item: InkEvent, extension: number): void {
+  const stem = eventStem(item, extension)
+  const tick = item.placed.heads[0]?.pitch.startTick
+  if (stem === undefined || tick === undefined) return
+  appendStem(svg, stem, INK, { staff: item.placed.event.staff, startTick: tick })
+}
+
+function appendBeam(svg: SVGSVGElement, shape: BeamShape, staff: string): void {
+  const polygon = document.createElementNS(SVG_NS, 'polygon')
+  polygon.setAttribute('points', shape.points.map((point) => `${point.x},${point.y}`).join(' '))
+  polygon.setAttribute('fill', INK)
+  polygon.setAttribute('data-beam', shape.level === 1 ? 'primary' : 'secondary')
+  polygon.setAttribute('data-staff', staff)
+  let minY = shape.points[0].y
+  let maxY = minY
+  for (const point of shape.points) {
+    minY = Math.min(minY, point.y)
+    maxY = Math.max(maxY, point.y)
+  }
+  polygon.setAttribute('data-extent-min', String(minY))
+  polygon.setAttribute('data-extent-max', String(maxY))
+  svg.append(polygon)
+}
+
 function drawEvent(
   svg: SVGSVGElement,
   frame: { trebleBottomY: number; bassBottomY: number },
@@ -278,22 +382,6 @@ function drawEvent(
   anchorX: number,
 ): void {
   const bottomY = group.event.staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
-  if (durationHasStem(group.event.duration.base)) {
-    const stem = stemGeometry({
-      direction: group.direction,
-      noteheadRadiusX: NOTE_RX,
-      heads: group.heads.map((head) => ({
-        x: anchorX + head.offsetX,
-        y: noteheadY(bottomY, head.staffStep),
-        staffStep: head.staffStep,
-        displaced: head.displaced,
-      })),
-    })
-    const tick = group.heads[0]?.pitch.startTick
-    if (stem !== undefined && tick !== undefined) {
-      appendStem(svg, stem, INK, { staff: group.event.staff, startTick: tick })
-    }
-  }
   for (const head of group.heads) {
     drawPitch(svg, frame, group.event, head.pitch, anchorX + head.offsetX)
   }
