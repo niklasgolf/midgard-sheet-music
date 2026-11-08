@@ -18,7 +18,10 @@ import { matchWrittenDuration } from './written-duration.ts'
 export type MeasurePitch = {
   midi: number
   track: number
-  /** Written onset. For an unsplit note this is the MIDI onset. */
+  /**
+   * Identity onset. An unsplit note keeps its original MIDI onset here.
+   * The column onset is the written position used to place the note.
+   */
   startTick: number
   /** Written end. For an unsplit note this is the MIDI end. */
   endTick: number
@@ -67,7 +70,7 @@ export type RhythmicColumn = {
 
 /**
  * Notes whose written duration is unknown.
- * They share a column when their MIDI onsets are the same tick.
+ * They share a column when their written onsets are the same tick.
  * The onset fraction is that tick as a share of the measure, not a written rhythm.
  */
 export type ProvisionalEvent = {
@@ -117,6 +120,11 @@ export function buildMeasureContent(options: {
   writtenDurations?: readonly WrittenDurationReading[]
   /** Ornamental notes attached to a principal attack. */
   graceNotes?: readonly GraceNoteReading[]
+  /**
+   * Tick used to choose the measure and the rhythmic column.
+   * Absent means the original MIDI onset. The MIDI event itself is not rewritten.
+   */
+  writtenOnsetTick?: (note: MidiNote) => number
 }): MeasureContent {
   const unresolved: UnresolvedNote[] = []
   const groups = new Map<string, StaffEvent>()
@@ -134,20 +142,21 @@ export function buildMeasureContent(options: {
       placeSpelledNote(note, segments, options, groups, provisional, unresolved, ties, spanTicks)
       continue
     }
+    const onsetTick = options.writtenOnsetTick?.(note) ?? note.startTick
     const grace = matchGraceNote(note, graceReadings)
     if (grace !== undefined) {
-      if (beginsInSpan(note.startTick, options.span)) placeGraceNote(note, grace, options, graceNotes, unresolved)
+      if (beginsInSpan(onsetTick, options.span)) placeGraceNote(note, grace, options, graceNotes, unresolved)
       continue
     }
     const written = matchWrittenDuration(note, writtenDurations, options.ticksPerWrittenQuarter)
     if (written !== undefined) {
-      if (beginsInSpan(note.startTick, options.span)) {
-        placeOverriddenNote(note, written, options, groups, provisional, unresolved, spanTicks)
+      if (beginsInSpan(onsetTick, options.span)) {
+        placeOverriddenNote(note, written, onsetTick, options, groups, provisional, unresolved, spanTicks)
       }
       continue
     }
-    if (!beginsInSpan(note.startTick, options.span)) continue
-    placeSingleNote(note, options, groups, provisional, unresolved, spanTicks)
+    if (!beginsInSpan(onsetTick, options.span)) continue
+    placeSingleNote(note, onsetTick, options, groups, provisional, unresolved, spanTicks)
   }
 
   const columns = new Map<string, RhythmicColumn>()
@@ -220,6 +229,7 @@ function placeGraceNote(
 function placeOverriddenNote(
   note: MidiNote,
   written: { duration: WrittenDuration; writtenEndTick: number; durationTicks: number },
+  onsetTick: number,
   options: {
     span: { startTick: number; endTick: number }
     ticksPerWrittenQuarter: number
@@ -236,7 +246,7 @@ function placeOverriddenNote(
     unresolved.push(unresolvedNote(note, `Track ${note.track} has no piano staff assignment.`))
     return
   }
-  const offsetTicks = note.startTick - options.span.startTick
+  const offsetTicks = onsetTick - options.span.startTick
   const onset = interpretOnset(offsetTicks, options.ticksPerWrittenQuarter)
   const pitch: MeasurePitch = {
     midi: note.midi,
@@ -307,6 +317,7 @@ function placeSpelledNote(
 
 function placeSingleNote(
   note: MidiNote,
+  onsetTick: number,
   options: {
     span: { startTick: number; endTick: number }
     ticksPerWrittenQuarter: number
@@ -325,7 +336,7 @@ function placeSingleNote(
   }
 
   const duration = interpretDuration(note.durationTicks, options.ticksPerWrittenQuarter)
-  const offsetTicks = note.startTick - options.span.startTick
+  const offsetTicks = onsetTick - options.span.startTick
   if (!duration.recognized) {
     unresolved.push(unresolvedNote(note, duration.message))
     rememberProvisional(provisional, pitchFromNote(note), staff, offsetTicks, spanTicks, options.measureQuarters)

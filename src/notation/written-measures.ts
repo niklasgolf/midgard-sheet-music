@@ -1,3 +1,4 @@
+import { resolveWrittenOnset } from '../interpretation/written-onset.ts'
 import type { MidiNote } from '../midi/parse-midi.ts'
 import type { MusicalInterpretation, NoteValue, TimeSignature } from '../song/song.ts'
 
@@ -66,7 +67,7 @@ export function availableCompleteMeasures(
 ): { ready: true; count: number } | { ready: false; message: string } {
   const ready = measureGrid(interpretation)
   if (!ready.ready) return ready
-  return { ready: true, count: completeMeasuresThrough(ready.grid, notes) }
+  return { ready: true, count: completeMeasuresThrough(ready.grid, notes, interpretation) }
 }
 
 export type DisplayedMeasures =
@@ -85,7 +86,7 @@ export function displayedMeasures(
 ): DisplayedMeasures {
   const ready = measureGrid(interpretation)
   if (!ready.ready) return ready
-  const available = completeMeasuresThrough(ready.grid, notes)
+  const available = completeMeasuresThrough(ready.grid, notes, interpretation)
   const requested = request === 'all' ? available : request
   if (request !== 'all' && (!Number.isInteger(requested) || requested < 1)) {
     return { ready: false, message: 'The measure count must be a positive whole number.' }
@@ -196,13 +197,18 @@ function planMeasures(grid: MeasureGrid, measureCount: number): WrittenMeasure[]
   return measures
 }
 
-function completeMeasuresThrough(grid: MeasureGrid, notes: readonly MidiNote[]): number {
+function completeMeasuresThrough(
+  grid: MeasureGrid,
+  notes: readonly MidiNote[],
+  interpretation: MusicalInterpretation,
+): number {
   const pickupTicks = grid.pickupQuarters === undefined ? 0 : grid.pickupQuarters * grid.quarter
   const firstFull = grid.origin + pickupTicks
   let count = 0
   for (const note of notes) {
-    if (note.startTick < firstFull) continue
-    const index = Math.floor((note.startTick - firstFull) / grid.fullMeasure) + 1
+    const onset = resolveWrittenOnset(note.startTick, interpretation)
+    if (onset < firstFull) continue
+    const index = Math.floor((onset - firstFull) / grid.fullMeasure) + 1
     if (index > count) count = index
   }
   return count

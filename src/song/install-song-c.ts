@@ -1,5 +1,6 @@
 import type { SongRepository } from './song-repository.ts'
-import type { Song } from './song.ts'
+import { planWrittenDuration } from './install-sustained-reading.ts'
+import type { Song, WrittenDurationReading, WrittenOnsetAlignment } from './song.ts'
 
 export const SONG_C_ID = 'eine-kleine-nachtmusik-intermediate'
 
@@ -13,6 +14,26 @@ export const SONG_C_MEASURE_COUNT = 6
 
 /** Song C's first row choice. A saved choice is left alone. */
 export const SONG_C_MEASURES_PER_ROW = 2
+
+/** Sixteenth grid. An attack more than 30 ticks away keeps its MIDI onset. */
+export const SONG_C_ONSET_ALIGNMENT: WrittenOnsetAlignment = {
+  subdivisionsPerQuarter: 4,
+  maxDeviationTicks: 30,
+}
+
+/**
+ * Written eighths whose performed length is not an eighth.
+ * The G chord at 3686 is an eighth in the print. G4 is held for 768 ticks.
+ * The B chord at 5376 is an eighth in the print. B4 and B5 last 30 ticks.
+ */
+export const SONG_C_WRITTEN_DURATIONS: readonly WrittenDurationReading[] = [
+  { track: 1, midi: 55, startTick: 3686, endTick: 4147, written: 'eighth', writtenEndTick: 3926 },
+  { track: 1, midi: 67, startTick: 3686, endTick: 4454, written: 'eighth', writtenEndTick: 3926 },
+  { track: 1, midi: 79, startTick: 3686, endTick: 3962, written: 'eighth', writtenEndTick: 3926 },
+  { track: 1, midi: 59, startTick: 5376, endTick: 5621, written: 'eighth', writtenEndTick: 5616 },
+  { track: 1, midi: 71, startTick: 5376, endTick: 5406, written: 'eighth', writtenEndTick: 5616 },
+  { track: 1, midi: 83, startTick: 5376, endTick: 5406, written: 'eighth', writtenEndTick: 5616 },
+]
 
 export type SongCInstall =
   | { status: 'absent' }
@@ -80,6 +101,24 @@ export function planSongCFoundation(song: Song):
     )
   }
 
+  const alignment = interpretation.writtenOnsetAlignment
+  if (alignment === undefined) {
+    interpretation = { ...interpretation, writtenOnsetAlignment: SONG_C_ONSET_ALIGNMENT }
+    changed = true
+  } else if (!sameOnsetAlignment(alignment, SONG_C_ONSET_ALIGNMENT)) {
+    messages.push('Song C already has a different written-onset alignment. The sixteenth-grid reading was left unused.')
+  }
+
+  for (const reading of SONG_C_WRITTEN_DURATIONS) {
+    const planned = planWrittenDuration({ ...song, musicalInterpretation: interpretation }, reading)
+    if (planned.action === 'install') {
+      interpretation = planned.song.musicalInterpretation
+      changed = true
+    } else if (planned.action === 'conflict' || planned.action === 'midi-mismatch') {
+      messages.push(planned.message)
+    }
+  }
+
   if (display === undefined) {
     display = {
       measures: { kind: 'count', count: SONG_C_MEASURE_COUNT },
@@ -106,4 +145,8 @@ export function planSongCFoundation(song: Song):
     },
     messages,
   }
+}
+
+function sameOnsetAlignment(left: WrittenOnsetAlignment, right: WrittenOnsetAlignment): boolean {
+  return left.subdivisionsPerQuarter === right.subdivisionsPerQuarter && left.maxDeviationTicks === right.maxDeviationTicks
 }

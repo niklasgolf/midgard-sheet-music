@@ -1,8 +1,9 @@
 import './style.css'
+import { chooseSongView, editSongView, type EditorView } from './editor/editor-state.ts'
 import { previewSongTickWindow } from './midi/chopin-measure.ts'
 import { renderEngraving } from './notation/engraving-view.ts'
 import { renderMeasure, renderMeasureError } from './measure-view.ts'
-import { CHOPIN_SONG_ID, type SongLoad } from './song/import-chopin-song.ts'
+import type { SongLoad } from './song/import-chopin-song.ts'
 import { IndexedDBSongRepository } from './song/indexeddb-song-repository.ts'
 import { mountSheetDisplay } from './song/display-view.ts'
 import { installSongCFoundation } from './song/install-song-c.ts'
@@ -15,7 +16,9 @@ import { renderSongStatus, renderSongStatusError } from './song/song-status-view
 import type { Song } from './song/song.ts'
 
 const referencePdf = document.querySelector<HTMLIFrameElement>('#reference-pdf')
-const librarySelect = document.querySelector<HTMLSelectElement>('#song-library')
+const editorHeading = document.querySelector<HTMLElement>('#editor-heading')
+const changeSong = document.querySelector<HTMLButtonElement>('#change-song')
+const songChoices = document.querySelector<HTMLUListElement>('#song-choices')
 const storage = document.querySelector<HTMLElement>('#song-storage')
 const measure = document.querySelector<HTMLElement>('#measure-1')
 const settingsForm = document.querySelector<HTMLFormElement>('#song-settings-form')
@@ -25,7 +28,9 @@ const displayStatus = document.querySelector<HTMLElement>('#sheet-display-status
 const engraving = document.querySelector<HTMLElement>('#engraving')
 if (
   !referencePdf ||
-  !librarySelect ||
+  !editorHeading ||
+  !changeSong ||
+  !songChoices ||
   !storage ||
   !measure ||
   !settingsForm ||
@@ -37,6 +42,9 @@ if (
   throw new Error('Song page containers were not found')
 }
 const pdfFrame: HTMLIFrameElement = referencePdf
+const editorTitle: HTMLElement = editorHeading
+const changeSongButton: HTMLButtonElement = changeSong
+const songList: HTMLUListElement = songChoices
 const storagePanel: HTMLElement = storage
 const measurePanel: HTMLElement = measure
 const engravingPanel: HTMLElement = engraving
@@ -47,12 +55,13 @@ const engravingPanel: HTMLElement = engraving
  */
 const developmentTickWindow = { startTick: 0, endTick: 2000 }
 
+let view: EditorView = chooseSongView()
 let loaded: SongLoad | undefined
 let librarySongs: Song[] = []
 let importedIds = new Set<string>()
 
-const library = mountSongLibrary(librarySelect, (song) => {
-  showSong(song, false)
+const library = mountSongLibrary(songList, (song) => {
+  void openSong(song.id)
 })
 
 const songs: SongRepository = new IndexedDBSongRepository()
@@ -67,23 +76,17 @@ const display = mountSheetDisplay(displayForm, displayStatus, songs, (song) => {
   showSong(song, false)
 })
 
+changeSongButton.addEventListener('click', () => {
+  void returnToLibrary()
+})
+
 ensureProjectSongs(songs)
   .then(async (libraryLoad) => {
     const correction = await installSongBInterpretations(songs)
     const songC = await installSongCFoundation(songs)
-    librarySongs = libraryLoad.songs
-    if (correction.status === 'installed') {
-      librarySongs = librarySongs.map((song) => (song.id === correction.song.id ? correction.song : song))
-    }
-    if (songC.status === 'installed') {
-      librarySongs = librarySongs.map((song) => (song.id === songC.song.id ? songC.song : song))
-    }
     importedIds = new Set(libraryLoad.importedIds)
-    const initial = librarySongs.find((song) => song.id === CHOPIN_SONG_ID) ?? librarySongs[0]
-    if (!initial) {
-      throw new Error('The song library is empty.')
-    }
-    showSong(initial, true)
+    librarySongs = await songs.listSongs()
+    showLibrary()
     const correctionMessage = [installMessage(correction), installMessage(songC)].filter((message) => message !== '').join(' ')
     if (correctionMessage !== '') {
       settingsStatus.textContent = correctionMessage
@@ -98,6 +101,42 @@ ensureProjectSongs(songs)
     engravingPanel.replaceChildren()
   })
 
+function showLibrary(): void {
+  view = chooseSongView()
+  applyEditorChrome()
+  library.show(librarySongs)
+  clearOpenSong()
+}
+
+async function openSong(songId: string): Promise<void> {
+  const song = await songs.getSong(songId)
+  if (song === undefined) {
+    librarySongs = await songs.listSongs()
+    showLibrary()
+    return
+  }
+  view = editSongView(song.id)
+  applyEditorChrome(song.metadata.title)
+  showSong(song, true)
+}
+
+function applyEditorChrome(title?: string): void {
+  if (view.mode === 'choose-song') {
+    editorTitle.textContent = 'Choose a Song'
+    changeSongButton.hidden = true
+    songList.hidden = false
+    return
+  }
+  editorTitle.textContent = title ?? ''
+  changeSongButton.hidden = false
+  songList.hidden = true
+}
+
+async function returnToLibrary(): Promise<void> {
+  librarySongs = await songs.listSongs()
+  showLibrary()
+}
+
 function showSong(song: Song, loadPdf: boolean): void {
   const previousId = loaded?.song.id
   loaded = {
@@ -109,7 +148,15 @@ function showSong(song: Song, loadPdf: boolean): void {
   renderStoredSong(loaded)
   settings.show(song)
   display.show(song)
-  library.show(librarySongs, song.id)
+}
+
+function clearOpenSong(): void {
+  loaded = undefined
+  pdfFrame.removeAttribute('src')
+  pdfFrame.title = 'Original sheet music'
+  engravingPanel.replaceChildren()
+  storagePanel.replaceChildren()
+  measurePanel.replaceChildren()
 }
 
 function installMessage(

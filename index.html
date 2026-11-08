@@ -12,7 +12,7 @@
           <iframe
             class="reference__frame"
             id="reference-pdf"
-            title="Chopin Prelude Op. 28 No. 7, original sheet music"
+            title="Original sheet music"
           ></iframe>
         </section>
       </div>
@@ -21,25 +21,14 @@
       </div>
       <div class="panel panel--info">
         <main class="sheet">
-      <section class="library" aria-labelledby="song-library-title">
-        <h2 class="library__title" id="song-library-title">Song Library</h2>
-        <label class="library__field" for="song-library">
-          Song
-          <select id="song-library"></select>
-        </label>
-      </section>
-      <header class="sheet__intro">
-        <h1 class="sheet__title">midGard Sheet Music</h1>
-        <p class="sheet__subtitle">A TypeScript &amp; SVG Sheet Music Project</p>
+      <header class="editor">
+        <h1 class="editor__title">The midGard Sheet Music Editor</h1>
+        <h2 class="editor__heading" id="editor-heading">Choose a Song</h2>
+        <button class="editor__change" id="change-song" type="button" hidden>Change song</button>
       </header>
-      <p class="sheet__lead">
-        An experimental sheet music editor and reader, built with TypeScript and
-        SVG. Our goal is to create beautiful, precise musical notation for piano,
-        with future support for MIDI import, editing, and the midGard notation
-        system.
-      </p>
-      <section class="storage" id="song-storage" aria-label="Song storage"></section>
-      <section class="settings" aria-labelledby="song-settings-title">
+      <ul class="editor__list" id="song-choices" aria-labelledby="editor-heading"></ul>
+      <section class="storage" id="song-storage" aria-label="Song storage" hidden></section>
+      <section class="settings" aria-labelledby="song-settings-title" hidden>
         <h2 class="settings__title" id="song-settings-title">Song Settings</h2>
         <p class="settings__intro">
           Composition-wide information for this Song. Saving it does not change the imported MIDI.
@@ -134,7 +123,7 @@
           <p class="settings__status" id="song-settings-status" role="status" aria-live="polite"></p>
         </form>
       </section>
-      <section class="settings" aria-labelledby="display-title">
+      <section class="settings" aria-labelledby="display-title" hidden>
         <h2 class="settings__title" id="display-title">Sheet Music Display</h2>
           <p class="settings__intro">
           How many complete measures to draw, and how many sit on each row. A pickup is shown as
@@ -179,7 +168,7 @@
           <p class="settings__status" id="sheet-display-status" role="status" aria-live="polite"></p>
         </form>
       </section>
-      <div class="measure" id="measure-1" aria-label="Notes from the stored Song"></div>
+      <div class="measure" id="measure-1" aria-label="Notes from the stored Song" hidden></div>
         </main>
       </div>
     </div>

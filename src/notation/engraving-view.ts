@@ -2,6 +2,7 @@ import type { MidiNote } from '../midi/parse-midi.ts'
 import { fractionFromQuarters } from '../interpretation/duration.ts'
 import { buildMeasureContent } from '../interpretation/measure-content.ts'
 import { assignPianoStaffs, type PianoStaff } from '../interpretation/staff.ts'
+import { resolveWrittenOnset } from '../interpretation/written-onset.ts'
 import { completeMeasureRequest, measuresPerRowCount, type Song, type TimeSignature } from '../song/song.ts'
 import { displayedMeasures } from './written-measures.ts'
 import { measureSvg } from './piano-measure-svg.ts'
@@ -94,6 +95,7 @@ function measureBlock(
     sustainedNotes: song.musicalInterpretation.sustainedNotes,
     writtenDurations: song.musicalInterpretation.writtenDurations,
     graceNotes: song.musicalInterpretation.graceNotes,
+    writtenOnsetTick: (note) => resolveWrittenOnset(note.startTick, song.musicalInterpretation),
   })
   const frame = document.createElement('div')
   frame.className = 'measure'

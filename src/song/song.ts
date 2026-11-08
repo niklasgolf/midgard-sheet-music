@@ -87,6 +87,17 @@ export type GraceNoteReading = {
 }
 
 /**
+ * How performed attacks are moved onto a written rhythmic grid.
+ * Absent means the original MIDI onset is the written onset.
+ * The grid is a number of equal parts of one written quarter. 4 is a sixteenth grid.
+ */
+export type WrittenOnsetAlignment = {
+  subdivisionsPerQuarter: number
+  /** An attack farther than this many ticks from the grid keeps its MIDI onset. */
+  maxDeviationTicks: number
+}
+
+/**
  * Composition-wide musical decisions made after import.
  * Fields are omitted until Song Settings saves them.
  * Other properties may be added by later milestones and must be left in place.
@@ -102,6 +113,11 @@ export type MusicalInterpretation = {
    * Absent means tick 0. The stored note times are not moved.
    */
   writtenStartTick?: number
+  /**
+   * Snaps a performed attack to the written grid before the measure is chosen.
+   * Absent for Songs whose performed attacks already match the written grid.
+   */
+  writtenOnsetAlignment?: WrittenOnsetAlignment
   /**
    * For one note-bearing track, MIDI pitches at or above this number go to the treble staff.
    * Lower pitches go to the bass. Two-track piano files keep their track order.
@@ -235,6 +251,12 @@ function isInterpretation(value: unknown): value is MusicalInterpretation {
   if (interpretation.writtenStartTick !== undefined && !isWrittenStartTick(interpretation.writtenStartTick)) {
     return false
   }
+  if (
+    interpretation.writtenOnsetAlignment !== undefined &&
+    !isWrittenOnsetAlignment(interpretation.writtenOnsetAlignment)
+  ) {
+    return false
+  }
   if (interpretation.staffSplitPitch !== undefined && !isStaffSplitPitch(interpretation.staffSplitPitch)) {
     return false
   }
@@ -243,6 +265,19 @@ function isInterpretation(value: unknown): value is MusicalInterpretation {
 
 function isWrittenStartTick(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
+}
+
+function isWrittenOnsetAlignment(value: unknown): value is WrittenOnsetAlignment {
+  if (value === null || typeof value !== 'object') return false
+  const alignment = value as Partial<WrittenOnsetAlignment>
+  return (
+    Number.isInteger(alignment.subdivisionsPerQuarter) &&
+    alignment.subdivisionsPerQuarter !== undefined &&
+    alignment.subdivisionsPerQuarter >= 1 &&
+    Number.isInteger(alignment.maxDeviationTicks) &&
+    alignment.maxDeviationTicks !== undefined &&
+    alignment.maxDeviationTicks >= 0
+  )
 }
 
 function isStaffSplitPitch(value: unknown): value is number {

@@ -15,7 +15,9 @@ import {
   SONG_C_ID,
   SONG_C_MEASURE_COUNT,
   SONG_C_MEASURES_PER_ROW,
+  SONG_C_ONSET_ALIGNMENT,
   SONG_C_STAFF_SPLIT_PITCH,
+  SONG_C_WRITTEN_DURATIONS,
   SONG_C_WRITTEN_START_TICK,
 } from '../src/song/install-song-c.ts'
 import {
@@ -226,7 +228,13 @@ const conflicted = songFor(
   SONG_C_ID,
   'Eine kleine Nachtmusik — Intermediate',
   songCMidi,
-  { ...songCInterpretation, writtenStartTick: 100, staffSplitPitch: 40 },
+  {
+    ...songCInterpretation,
+    writtenStartTick: 100,
+    staffSplitPitch: 40,
+    writtenOnsetAlignment: SONG_C_ONSET_ALIGNMENT,
+    writtenDurations: SONG_C_WRITTEN_DURATIONS,
+  },
   { measures: { kind: 'count', count: 6 }, measuresPerRow: { kind: 'fixed', count: 3 } },
 )
 const conflict = planSongCFoundation(conflicted)
