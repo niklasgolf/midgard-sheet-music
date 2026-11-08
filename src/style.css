@@ -89,23 +89,26 @@ body {
 }
 
 .editor__title {
-  margin: 0 0 28px;
+  margin: 0;
   color: #2a1a0e;
   font-size: 34px;
   font-weight: 600;
   line-height: 1.2;
+  text-align: center;
 }
 
 .editor__heading {
-  margin: 0;
+  margin: 8px 0 0;
   color: #2a1a0e;
   font-size: 26px;
   font-weight: 600;
   line-height: 1.3;
+  text-align: center;
 }
 
 .editor__change {
   display: block;
+  width: fit-content;
   margin: 12px 0 0 auto;
   padding: 0;
   color: #2a1a0e;
@@ -159,11 +162,29 @@ body {
   display: none;
 }
 
+.editor-display__form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 28px;
+  align-items: start;
+}
+
+.editor-display__form > .settings__status {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+
 .editor-display__group {
-  margin: 0 0 22px;
+  margin: 0;
   padding: 0;
   border: 0;
   min-inline-size: 0;
+}
+
+@media (max-width: 720px) {
+  .editor-display__form {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .editor-display__legend {

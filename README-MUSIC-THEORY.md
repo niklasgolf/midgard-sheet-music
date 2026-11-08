@@ -202,7 +202,7 @@ Song A’s id is the one already used by the first import. It is kept. Song B an
 
 After the library is loaded, one install looks at Song B only. It carries the confirmed spellings: the Bar 5 D4, the Bar 11 C♯5 and E5, the Bar 15 and 16 A4 halves, the Bar 15 written sixteenth, and the Bar 15 grace note. Each spelling is added only when Part B still contains that exact MIDI event and Part C does not already spell it. A grace note is also checked against the principal note it names. Missing spellings are appended in one save. A second startup finds them and does not write. A Bar 5 reading stored without tie flags still means both junctions are tied, so the install does not rewrite it. If Part C already spells the same event with a different written value, different tie flags, or a different grace-note reading, that stored spelling stays and the install says so. Song A is not part of the install. Parts A and B, and every other Part C field, stay as they were. This is not a schema migration. The database version stays 1.
 
-The right panel has two screens. Both keep the title **The midGard Sheet Music Editor**. Choose a Song lists every record from `listSongs()`. Nothing is selected until the user clicks. Edit Mode replaces that heading with the Song’s title and shows Change song, aligned to the right on the next line. The list hides. Beneath that header, Edit Mode shows Measures per row and Measures to display. The PDF and the measure SVGs load from `getSong`. Change song asks `listSongs()` again, clears the open Song, and does not call `saveSong`.
+The right panel has two screens. Both keep the title **The midGard Sheet Music Editor**, centered, with the subtitle centered on the next line. Choose a Song lists every record from `listSongs()`. Nothing is selected until the user clicks. Edit Mode replaces that subtitle with the Song’s title and shows Change song, aligned to the right on the next line. The list hides. Beneath that header, Edit Mode shows Measures per row and Measures to display side by side, in two equal columns. A window narrower than 720 pixels stacks those columns. The right panel stays 800 pixels wide. The PDF and the measure SVGs load from `getSong`. Change song asks `listSongs()` again, clears the open Song, and does not call `saveSong`.
 
 A refresh always opens Choose a Song. The page does not reopen the Song that was on screen. That choice is temporary editor navigation, held in `EditorView` while the page is open. It is not written into Part C, Song Settings, or IndexedDB. The saved spelling is still in Song B, and drawing reads it only after that Song is chosen again. Song Settings, the storage facts, and the temporary note list remain in the page and stay hidden.
 
@@ -478,7 +478,7 @@ It does not decide where that measure sits on the page, which row it belongs to,
 |---|---:|---|
 | Left | 1200px | The original PDF, with a 12px margin and no outer panel scrollbar |
 | Center | 1200px | The generated measure divs |
-| Right | 800px | The midGard Sheet Music Editor. Choose a Song, or the title of the open Song and Change song |
+| Right | 800px | The midGard Sheet Music Editor, centered. Choose a Song, or the title of the open Song and Change song. In Edit Mode, Measures per row and Measures to display share one row |
 
 The center and the right panel scroll vertically on their own. The workspace itself scrolls horizontally when the window is narrower than 3200 pixels. The three panels keep those widths.
 
