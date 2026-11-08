@@ -151,6 +151,94 @@ body {
   background: #f4e4cf;
 }
 
+.editor-display {
+  margin-top: 32px;
+}
+
+.editor-display[hidden] {
+  display: none;
+}
+
+.editor-display__group {
+  margin: 0 0 22px;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+
+.editor-display__legend {
+  margin: 0 0 10px;
+  padding: 0;
+  color: #2a1a0e;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.editor-display__segment {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: start;
+  width: fit-content;
+  border: 1px solid #7a4e2d;
+}
+
+.editor-display__segment-choice {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 52px;
+  padding: 6px 14px;
+  color: #2a1a0e;
+  cursor: pointer;
+}
+
+.editor-display__segment-choice + .editor-display__segment-choice {
+  border-left: 1px solid #7a4e2d;
+}
+
+.editor-display__segment-choice input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+  appearance: none;
+  background: transparent;
+  border: 0;
+}
+
+.editor-display__segment-choice:has(input:checked) {
+  background: #2a1a0e;
+  color: #f4e4cf;
+}
+
+.editor-display__segment-choice:has(input:focus-visible) {
+  outline: 2px solid #2a1a0e;
+  outline-offset: 2px;
+}
+
+.editor-display select,
+.editor-display__custom input {
+  width: 100%;
+  max-width: 16rem;
+  color: #2a1a0e;
+  font: inherit;
+  background: #f4e4cf;
+  border: 1px solid #7a4e2d;
+  padding: 6px 8px;
+}
+
+.editor-display__custom {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  color: #2a1a0e;
+}
+
+.editor-display__custom[hidden] {
+  display: none;
+}
+
 .library {
   margin-bottom: 28px;
   padding-bottom: 28px;

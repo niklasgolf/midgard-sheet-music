@@ -26,24 +26,31 @@ export function mountSheetDisplay(
 
   let current: Song | undefined
   let filling = false
+  let writes: Promise<void> = Promise.resolve()
 
   form.addEventListener('submit', (event) => {
     event.preventDefault()
   })
 
+  const save = (patch: SongDisplay): void => {
+    writes = writes
+      .then(() =>
+        persist(form, status, repository, () => current, patch, onSaved, (song) => {
+          current = song
+        }),
+      )
+      .catch(() => undefined)
+  }
+
   measures.addEventListener('change', () => {
     if (filling) return
     customField.hidden = measures.value !== 'custom'
-    if (measures.value === '6' || measures.value === '12') {
-      void persist(form, status, repository, () => current, { measures: { kind: 'count', count: Number(measures.value) } }, onSaved, (song) => {
-        current = song
-      })
+    if (measures.value === 'all') {
+      save({ measures: { kind: 'all' } })
       return
     }
-    if (measures.value === 'all') {
-      void persist(form, status, repository, () => current, { measures: { kind: 'all' } }, onSaved, (song) => {
-        current = song
-      })
+    if (isListedCount(measures.value)) {
+      save({ measures: { kind: 'count', count: Number(measures.value) } })
       return
     }
     const parsed = parsePositiveInteger(customCount.value)
@@ -51,9 +58,16 @@ export function mountSheetDisplay(
       writeStatus(status, 'Enter a positive whole number of measures.', true)
       return
     }
-    void persist(form, status, repository, () => current, { measures: { kind: 'count', count: parsed.value } }, onSaved, (song) => {
-      current = song
-    })
+    save({ measures: { kind: 'count', count: parsed.value } })
+  })
+
+  customCount.addEventListener('input', () => {
+    if (filling || measures.value !== 'custom') return
+    if (!parsePositiveInteger(customCount.value).ok) {
+      writeStatus(status, 'Enter a positive whole number of measures.', true)
+      return
+    }
+    writeStatus(status, '', false)
   })
 
   customCount.addEventListener('change', () => {
@@ -63,9 +77,7 @@ export function mountSheetDisplay(
       writeStatus(status, 'Enter a positive whole number of measures.', true)
       return
     }
-    void persist(form, status, repository, () => current, { measures: { kind: 'count', count: parsed.value } }, onSaved, (song) => {
-      current = song
-    })
+    save({ measures: { kind: 'count', count: parsed.value } })
   })
 
   for (const radio of rowRadios) {
@@ -73,17 +85,7 @@ export function mountSheetDisplay(
       if (filling || !radio.checked) return
       const count = radio.value === '2' ? 2 : radio.value === '3' ? 3 : undefined
       if (count === undefined) return
-      void persist(
-        form,
-        status,
-        repository,
-        () => current,
-        { measuresPerRow: { kind: 'fixed', count } },
-        onSaved,
-        (song) => {
-          current = song
-        },
-      )
+      save({ measuresPerRow: { kind: 'fixed', count } })
     })
   }
 
@@ -100,7 +102,7 @@ export function mountSheetDisplay(
         measures.value = 'all'
         customCount.value = ''
         customField.hidden = true
-      } else if (choice.count === 6 || choice.count === 12) {
+      } else if (isListedCount(String(choice.count))) {
         measures.value = String(choice.count)
         customCount.value = ''
         customField.hidden = true
@@ -115,6 +117,10 @@ export function mountSheetDisplay(
       writeClamp(status, song)
     },
   }
+}
+
+function isListedCount(value: string): boolean {
+  return value === '1' || value === '2' || value === '3' || value === '4' || value === '5' || value === '6'
 }
 
 export function parsePositiveInteger(text: string): { ok: true; value: number } | { ok: false } {

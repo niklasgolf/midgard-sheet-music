@@ -112,6 +112,17 @@ if (songAPickup?.index !== 0 || songAPickup.span.startTick !== 0 || songAPickup.
 if (songABar1?.index !== 1 || songABar1.span.startTick !== 666.67) fail('Song A Bar 1 moved.')
 if (songABar6?.index !== 6) fail('Song A did not draw through Bar 6.')
 
+const songBTwo = displayedMeasures(songBInterpretation, songBMidi.notes, 2)
+if (!songBTwo.ready) fail(songBTwo.message)
+if (songBTwo.measures.map((measure) => measure.index).join(',') !== '0,1,2') {
+  fail('Two complete measures of Song B did not keep Bar 0.')
+}
+const songCTwo = displayedMeasures(songCInterpretation, songCMidi.notes, 2)
+if (!songCTwo.ready) fail(songCTwo.message)
+if (songCTwo.measures.map((measure) => measure.index).join(',') !== '1,2') {
+  fail('Two complete measures of Song C included a pickup.')
+}
+
 const songBSix = displayedMeasures(songBInterpretation, songBMidi.notes, 6)
 if (!songBSix.ready) fail(songBSix.message)
 if (songBSix.measures.map((measure) => measure.index).join(',') !== '0,1,2,3,4,5,6') {

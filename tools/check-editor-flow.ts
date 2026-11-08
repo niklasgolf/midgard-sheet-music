@@ -41,7 +41,9 @@ if (page.includes('sheet__lead')) fail('The old project description is still in 
 for (const marker of [
   'id="song-storage" aria-label="Song storage" hidden',
   'aria-labelledby="song-settings-title" hidden',
-  'aria-labelledby="display-title" hidden',
+  'id="editor-display" hidden',
+  'Measures per row',
+  'Measures to display',
   'id="measure-1" aria-label="Notes from the stored Song" hidden',
 ]) {
   if (!page.includes(marker)) fail(`A technical panel is not hidden: ${marker}.`)

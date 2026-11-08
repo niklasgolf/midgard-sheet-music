@@ -19,6 +19,7 @@ const referencePdf = document.querySelector<HTMLIFrameElement>('#reference-pdf')
 const editorHeading = document.querySelector<HTMLElement>('#editor-heading')
 const changeSong = document.querySelector<HTMLButtonElement>('#change-song')
 const songChoices = document.querySelector<HTMLUListElement>('#song-choices')
+const editorDisplay = document.querySelector<HTMLElement>('#editor-display')
 const storage = document.querySelector<HTMLElement>('#song-storage')
 const measure = document.querySelector<HTMLElement>('#measure-1')
 const settingsForm = document.querySelector<HTMLFormElement>('#song-settings-form')
@@ -31,6 +32,7 @@ if (
   !editorHeading ||
   !changeSong ||
   !songChoices ||
+  !editorDisplay ||
   !storage ||
   !measure ||
   !settingsForm ||
@@ -45,6 +47,7 @@ const pdfFrame: HTMLIFrameElement = referencePdf
 const editorTitle: HTMLElement = editorHeading
 const changeSongButton: HTMLButtonElement = changeSong
 const songList: HTMLUListElement = songChoices
+const displayPanel: HTMLElement = editorDisplay
 const storagePanel: HTMLElement = storage
 const measurePanel: HTMLElement = measure
 const engravingPanel: HTMLElement = engraving
@@ -67,13 +70,11 @@ const library = mountSongLibrary(songList, (song) => {
 const songs: SongRepository = new IndexedDBSongRepository()
 
 const settings = mountSongSettings(settingsForm, settingsStatus, songs, (song) => {
-  librarySongs = librarySongs.map((entry) => (entry.id === song.id ? song : entry))
-  showSong(song, false)
+  rememberOpenSong(song)
 })
 
 const display = mountSheetDisplay(displayForm, displayStatus, songs, (song) => {
-  librarySongs = librarySongs.map((entry) => (entry.id === song.id ? song : entry))
-  showSong(song, false)
+  rememberOpenSong(song)
 })
 
 changeSongButton.addEventListener('click', () => {
@@ -125,11 +126,18 @@ function applyEditorChrome(title?: string): void {
     editorTitle.textContent = 'Choose a Song'
     changeSongButton.hidden = true
     songList.hidden = false
+    displayPanel.hidden = true
     return
   }
   editorTitle.textContent = title ?? ''
   changeSongButton.hidden = false
   songList.hidden = true
+  displayPanel.hidden = false
+}
+
+function rememberOpenSong(song: Song): void {
+  librarySongs = librarySongs.map((entry) => (entry.id === song.id ? song : entry))
+  if (view.mode === 'edit-song' && view.songId === song.id) showSong(song, false)
 }
 
 async function returnToLibrary(): Promise<void> {
