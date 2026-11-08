@@ -17,6 +17,10 @@
         </section>
       </div>
       <div class="panel panel--score">
+        <section class="midgard-staff" id="midgard-staff" aria-labelledby="midgard-staff-title" hidden>
+          <h2 class="midgard-staff__title" id="midgard-staff-title">midGard Staff — SVG Experiment</h2>
+          <div class="midgard-staff__preview" id="midgard-staff-preview"></div>
+        </section>
         <section class="engraving" id="engraving" aria-labelledby="engraving-title"></section>
       </div>
       <div class="panel panel--info">
@@ -145,8 +149,21 @@
                 <span class="settings__label">Key signature</span>
                 <select id="song-key" name="key"></select>
               </label>
-              <button class="settings__save settings__commit" type="submit">Save Changes</button>
+              <div class="settings__field settings__system">
+                <span class="settings__label" id="sheet-system-label">Sheet system</span>
+                <div class="editor-display__segment" role="radiogroup" aria-labelledby="sheet-system-label">
+                  <label class="editor-display__segment-choice">
+                    <input name="sheetSystem" type="radio" value="classical" checked />
+                    Classical
+                  </label>
+                  <label class="editor-display__segment-choice">
+                    <input name="sheetSystem" type="radio" value="midgard" />
+                    midGard
+                  </label>
+                </div>
+              </div>
             </div>
+            <button class="settings__save settings__commit" type="submit">Save Changes</button>
           </div>
           <p class="settings__status" id="song-settings-status" role="status" aria-live="polite"></p>
         </form>

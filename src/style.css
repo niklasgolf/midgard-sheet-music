@@ -225,6 +225,7 @@ body {
     'row count time'
     'pickup ticks duration'
     'bottom bottom bottom'
+    'save save save'
     'display-status display-status display-status'
     'settings-status settings-status settings-status';
   gap: 18px 20px;
@@ -288,6 +289,7 @@ body {
       'ticks'
       'duration'
       'bottom'
+      'save'
       'display-status'
       'settings-status';
   }
@@ -484,14 +486,16 @@ body {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   column-gap: 20px;
-  align-items: end;
+  align-items: start;
 }
 
-.settings__key {
+.settings__key,
+.settings__system {
   min-width: 0;
 }
 
 .settings__commit {
+  grid-area: save;
   justify-self: end;
   width: auto;
 }
@@ -613,6 +617,42 @@ body {
   font-size: 13px;
   font-weight: 400;
   line-height: 1.35;
+}
+
+.midgard-staff {
+  margin: 0 0 36px;
+}
+
+.midgard-staff[hidden] {
+  display: none;
+}
+
+.midgard-staff__title {
+  margin: 0 0 12px;
+  color: #2a1a0e;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.midgard-staff__preview {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  column-gap: 32px;
+  align-items: start;
+  justify-items: start;
+}
+
+.midgard-staff__copy {
+  min-width: 0;
+}
+
+.midgard-staff__preview svg {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: none;
+  background: #ffffff;
 }
 
 .engraving {

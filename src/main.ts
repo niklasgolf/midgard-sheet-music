@@ -1,6 +1,7 @@
 import './style.css'
 import { chooseSongView, editNamesView, editSongView, type EditorView } from './editor/editor-state.ts'
 import { renderEngraving } from './notation/engraving-view.ts'
+import { mountMidgardStaff } from './notation/midgard-staff-svg.ts'
 import type { SongLoad } from './song/import-chopin-song.ts'
 import { IndexedDBSongRepository } from './song/indexeddb-song-repository.ts'
 import { mountSheetDisplay } from './song/display-view.ts'
@@ -31,6 +32,8 @@ const namesReturn = document.querySelector<HTMLButtonElement>('#names-return')
 const displayForm = document.querySelector<HTMLFormElement>('#sheet-display-form')
 const displayStatus = document.querySelector<HTMLElement>('#sheet-display-status')
 const engraving = document.querySelector<HTMLElement>('#engraving')
+const midgardStaff = document.querySelector<HTMLElement>('#midgard-staff')
+const midgardStaffPreview = document.querySelector<HTMLElement>('#midgard-staff-preview')
 if (
   !referencePdf ||
   !editorHeading ||
@@ -48,7 +51,9 @@ if (
   !namesReturn ||
   !displayForm ||
   !displayStatus ||
-  !engraving
+  !engraving ||
+  !midgardStaff ||
+  !midgardStaffPreview
 ) {
   throw new Error('Song page containers were not found')
 }
@@ -64,6 +69,8 @@ const namesPanel: HTMLElement = namesPage
 const namesReturnButton: HTMLButtonElement = namesReturn
 const settingsSection = settingsForm.closest('section')
 const engravingPanel: HTMLElement = engraving
+const midgardStaffPanel: HTMLElement = midgardStaff
+mountMidgardStaff(midgardStaffPreview)
 if (!settingsSection) throw new Error('Song Settings were not found')
 const settingsPanel: HTMLElement = settingsSection
 
@@ -120,6 +127,7 @@ ensureProjectSongs(songs)
     renderSongStatusError(storagePanel, message)
     settingsStatus.textContent = message
     engravingPanel.replaceChildren()
+    midgardStaffPanel.hidden = true
   })
 
 function showLibrary(): void {
@@ -234,6 +242,7 @@ function clearOpenSong(): void {
   pdfFrame.removeAttribute('src')
   pdfFrame.title = 'Original sheet music'
   engravingPanel.replaceChildren()
+  midgardStaffPanel.hidden = true
   storagePanel.replaceChildren()
 }
 
@@ -260,5 +269,6 @@ function showPdf(song: Song): void {
 
 function renderStoredSong(load: SongLoad): void {
   renderSongStatus(storagePanel, load)
+  midgardStaffPanel.hidden = false
   renderEngraving(engravingPanel, load.song)
 }
