@@ -43,6 +43,101 @@
           </div>
         </section>
         <section class="engraving" id="engraving" aria-labelledby="engraving-title"></section>
+        <section class="pdf-inspector" id="pdf-inspector" aria-labelledby="pdf-inspector-title" hidden>
+          <header class="pdf-inspector__header">
+            <h2 class="pdf-inspector__title" id="pdf-inspector-title">Original PDF Inspector</h2>
+            <div class="pdf-inspector__rule" aria-hidden="true"><span></span></div>
+          </header>
+          <div class="pdf-inspector__cards">
+            <article class="pdf-inspector__card">
+              <h3 class="pdf-inspector__bar-label">Bar 0</h3>
+              <ul class="pdf-inspector__fruit-list">
+                <li class="pdf-inspector__fruit-item">
+                  <span class="pdf-inspector__fruit-mark" aria-hidden="true">🍌</span>
+                  <p class="pdf-inspector__fruit-text"><strong>Banana</strong> — a sweet and energetic fruit.</p>
+                </li>
+                <li class="pdf-inspector__fruit-item">
+                  <span class="pdf-inspector__fruit-mark" aria-hidden="true">🍋</span>
+                  <p class="pdf-inspector__fruit-text"><strong>Lemon</strong> — fresh, tangy, and full of vitamin C.</p>
+                </li>
+                <li class="pdf-inspector__fruit-item">
+                  <span class="pdf-inspector__fruit-mark" aria-hidden="true">🍊</span>
+                  <p class="pdf-inspector__fruit-text"><strong>Orange</strong> — juicy and rich in antioxidants.</p>
+                </li>
+                <li class="pdf-inspector__fruit-item">
+                  <span class="pdf-inspector__fruit-mark" aria-hidden="true">🍎</span>
+                  <p class="pdf-inspector__fruit-text"><strong>Apple</strong> — crisp, refreshing, and nutritious.</p>
+                </li>
+                <li class="pdf-inspector__fruit-item">
+                  <span class="pdf-inspector__fruit-mark" aria-hidden="true">🍇</span>
+                  <p class="pdf-inspector__fruit-text"><strong>Grape</strong> — small, sweet, and full of natural goodness.</p>
+                </li>
+                <li class="pdf-inspector__fruit-item">
+                  <span class="pdf-inspector__fruit-mark" aria-hidden="true">🍓</span>
+                  <p class="pdf-inspector__fruit-text"><strong>Strawberry</strong> — a classic, sweet summer favorite.</p>
+                </li>
+              </ul>
+            </article>
+            <article class="pdf-inspector__card">
+              <h3 class="pdf-inspector__bar-label">Bar 1</h3>
+              <ul class="pdf-inspector__fruit-list">
+                <li class="pdf-inspector__fruit-item">
+                  <span class="pdf-inspector__fruit-mark" aria-hidden="true">🥭</span>
+                  <p class="pdf-inspector__fruit-text"><strong>Mango</strong> — tropical, sweet, and full of flavor.</p>
+                </li>
+                <li class="pdf-inspector__fruit-item">
+                  <span class="pdf-inspector__fruit-mark" aria-hidden="true">🍍</span>
+                  <p class="pdf-inspector__fruit-text"><strong>Pineapple</strong> — juicy, bright, and naturally fresh.</p>
+                </li>
+                <li class="pdf-inspector__fruit-item">
+                  <span class="pdf-inspector__fruit-mark" aria-hidden="true">🥝</span>
+                  <p class="pdf-inspector__fruit-text"><strong>Kiwi</strong> — tangy, vibrant, and rich in vitamins.</p>
+                </li>
+                <li class="pdf-inspector__fruit-item">
+                  <span class="pdf-inspector__fruit-mark" aria-hidden="true">🍉</span>
+                  <p class="pdf-inspector__fruit-text"><strong>Watermelon</strong> — refreshing and perfectly hydrating.</p>
+                </li>
+                <li class="pdf-inspector__fruit-item">
+                  <span class="pdf-inspector__fruit-mark" aria-hidden="true">🍈</span>
+                  <p class="pdf-inspector__fruit-text"><strong>Melon</strong> — mild, sweet, and wonderfully fragrant.</p>
+                </li>
+                <li class="pdf-inspector__fruit-item">
+                  <span class="pdf-inspector__fruit-mark" aria-hidden="true">🍑</span>
+                  <p class="pdf-inspector__fruit-text"><strong>Peach</strong> — soft, juicy, and beautifully aromatic.</p>
+                </li>
+              </ul>
+            </article>
+            <article class="pdf-inspector__card">
+              <h3 class="pdf-inspector__bar-label">Bar 2</h3>
+              <ul class="pdf-inspector__fruit-list">
+                <li class="pdf-inspector__fruit-item">
+                  <span class="pdf-inspector__fruit-mark" aria-hidden="true">🍒</span>
+                  <p class="pdf-inspector__fruit-text"><strong>Cherry</strong> — small, sweet, and full of character.</p>
+                </li>
+                <li class="pdf-inspector__fruit-item">
+                  <span class="pdf-inspector__fruit-mark" aria-hidden="true">🫐</span>
+                  <p class="pdf-inspector__fruit-text"><strong>Blueberry</strong> — a tiny fruit with powerful benefits.</p>
+                </li>
+                <li class="pdf-inspector__fruit-item">
+                  <span class="pdf-inspector__fruit-mark" aria-hidden="true">🍑</span>
+                  <p class="pdf-inspector__fruit-text"><strong>Apricot</strong> — delicate, sweet, and sun-ripened.</p>
+                </li>
+                <li class="pdf-inspector__fruit-item">
+                  <span class="pdf-inspector__fruit-mark" aria-hidden="true">🍐</span>
+                  <p class="pdf-inspector__fruit-text"><strong>Pear</strong> — smooth, juicy, and naturally sweet.</p>
+                </li>
+                <li class="pdf-inspector__fruit-item">
+                  <span class="pdf-inspector__fruit-mark" aria-hidden="true">🥥</span>
+                  <p class="pdf-inspector__fruit-text"><strong>Coconut</strong> — exotic, creamy, and full of natural energy.</p>
+                </li>
+                <li class="pdf-inspector__fruit-item">
+                  <span class="pdf-inspector__fruit-mark" aria-hidden="true">🍋‍🟩</span>
+                  <p class="pdf-inspector__fruit-text"><strong>Lime</strong> — bright, zesty, and refreshingly crisp.</p>
+                </li>
+              </ul>
+            </article>
+          </div>
+        </section>
       </div>
       <div class="panel panel--info">
         <main class="sheet">
@@ -186,17 +281,18 @@
                 <span class="settings__label">Key signature</span>
                 <select id="song-key" name="key"></select>
               </label>
-              <div class="settings__field settings__system">
-                <span class="settings__label" id="sheet-system-label">Sheet system</span>
-                <div class="editor-display__segment" role="radiogroup" aria-labelledby="sheet-system-label">
-                  <label class="editor-display__segment-choice">
-                    <input name="sheetSystem" type="radio" value="classical" checked />
-                    Classical
-                  </label>
-                  <label class="editor-display__segment-choice">
-                    <input name="sheetSystem" type="radio" value="midgard" />
-                    midGard
-                  </label>
+              <div class="settings__field settings__view">
+                <span class="settings__label" id="view-inspector-label">View Inspector</span>
+                <div class="view-inspector" role="group" aria-labelledby="view-inspector-label">
+                  <button class="view-inspector__choice" type="button" data-score-view="classical" aria-pressed="true">
+                    Classical Sheet
+                  </button>
+                  <button class="view-inspector__choice" type="button" data-score-view="midgard" aria-pressed="false">
+                    midGard Sheet
+                  </button>
+                  <button class="view-inspector__choice" type="button" data-score-view="original-pdf" aria-pressed="false">
+                    Original PDF
+                  </button>
                 </div>
               </div>
             </div>

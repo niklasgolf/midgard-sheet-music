@@ -12,7 +12,7 @@ import {
   midgardLedgerYs,
   midgardNoteY,
 } from '../src/engraving/midgard-geometry.ts'
-import { notationSystem } from '../src/notation/notation-system.ts'
+import { notationSystem, scoreView } from '../src/notation/notation-system.ts'
 
 function fail(message: string): never {
   throw new Error(message)
@@ -22,6 +22,12 @@ if (notationSystem('classical') !== 'classical') fail('Classical was not kept.')
 if (notationSystem('midgard') !== 'midgard') fail('midGard was not selected.')
 if (notationSystem(null) !== 'classical' || notationSystem(undefined) !== 'classical' || notationSystem('other') !== 'classical') {
   fail('A missing or unknown sheet system must stay classical.')
+}
+if (scoreView('classical') !== 'classical' || scoreView('midgard') !== 'midgard' || scoreView('original-pdf') !== 'original-pdf') {
+  fail('The view inspector lost one of its three views.')
+}
+if (scoreView(null) !== 'classical' || scoreView(undefined) !== 'classical' || scoreView('other') !== 'classical') {
+  fail('An unknown view did not stay Classical Sheet.')
 }
 
 const naturals: Array<[number, number]> = [
@@ -119,15 +125,33 @@ if (!view.includes("system === 'midgard' ? 'midGard Sheet Music'")) {
 }
 
 const main = readFileSync('src/main.ts', 'utf8')
-if (!main.includes('useClassicalSheet()') || !main.includes("target.name !== 'sheetSystem'")) {
-  fail('Opening a song does not return to Classical, or the selector does not redraw.')
+if (!main.includes('useClassicalSheet()') || !main.includes('data-score-view')) {
+  fail('Opening a song does not return to Classical, or the view inspector does not redraw.')
 }
-const handler = main.slice(main.indexOf("target.name !== 'sheetSystem'"), main.indexOf('editNamesButton.addEventListener'))
+const handler = main.slice(main.indexOf('data-score-view'), main.indexOf('editNamesButton.addEventListener'))
 if (handler.includes('getSong') || handler.includes('saveSong')) {
-  fail('Switching the sheet system reloads or saves the Song.')
+  fail('Switching the view reloads or saves the Song.')
 }
+if (!main.includes("next === 'original-pdf'") || !main.includes('engravingPanel.replaceChildren()')) {
+  fail('Original PDF still draws the measure SVGs.')
+}
+const pageHtml = readFileSync('index.html', 'utf8')
+if (!pageHtml.includes('View Inspector') || !pageHtml.includes('Original PDF Inspector')) {
+  fail('The view inspector or its workspace is missing.')
+}
+if (!pageHtml.includes('Bar 0') || !pageHtml.includes('Bar 1') || !pageHtml.includes('Bar 2')) {
+  fail('The Original PDF inspector is missing its three bar cards.')
+}
+if (pageHtml.includes('name="sheetSystem"')) fail('The old sheet-system radios are still in the form.')
 const settings = readFileSync('src/song/song-settings-view.ts', 'utf8')
-if (settings.includes('sheetSystem')) fail('Song Settings stores the sheet system.')
+if (settings.includes('sheetSystem') || settings.includes('scoreView')) fail('Song Settings stores the view.')
+const css = readFileSync('src/style.css', 'utf8')
+if (!css.includes('.pdf-inspector__cards') || !css.includes('grid-template-rows: repeat(3, minmax(50px, auto))')) {
+  fail('The Original PDF inspector does not stack three bar cards.')
+}
+if (css.includes('#pdf-inspector:not([hidden])') && css.includes('#000000')) {
+  fail('The Original PDF inspector still uses the black workspace.')
+}
 
 console.log('midGard system checks passed.')
 console.log('Classical stays the default. Pitch follows the MIDI number, with no accidental glyphs.')

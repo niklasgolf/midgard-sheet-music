@@ -1,7 +1,7 @@
 import './style.css'
 import { chooseSongView, editNamesView, editSongView, type EditorView } from './editor/editor-state.ts'
 import { renderEngraving } from './notation/engraving-view.ts'
-import { notationSystem } from './notation/notation-system.ts'
+import { scoreView, type ScoreView } from './notation/notation-system.ts'
 import { mountMidgardStaff } from './notation/midgard-staff-svg.ts'
 import type { SongLoad } from './song/import-chopin-song.ts'
 import { IndexedDBSongRepository } from './song/indexeddb-song-repository.ts'
@@ -34,6 +34,7 @@ const namesReturn = document.querySelector<HTMLButtonElement>('#names-return')
 const displayForm = document.querySelector<HTMLFormElement>('#sheet-display-form')
 const displayStatus = document.querySelector<HTMLElement>('#sheet-display-status')
 const engraving = document.querySelector<HTMLElement>('#engraving')
+const pdfInspector = document.querySelector<HTMLElement>('#pdf-inspector')
 const midgardSystem = document.querySelector<HTMLElement>('#midgard-system')
 const midgardSystemStaffs = document.querySelector<HTMLElement>('#midgard-system-staffs')
 if (
@@ -54,6 +55,7 @@ if (
   !displayForm ||
   !displayStatus ||
   !engraving ||
+  !pdfInspector ||
   !midgardSystem ||
   !midgardSystemStaffs
 ) {
@@ -72,6 +74,7 @@ const namesReturnButton: HTMLButtonElement = namesReturn
 const musicalForm: HTMLFormElement = settingsForm
 const settingsSection = musicalForm.closest('section')
 const engravingPanel: HTMLElement = engraving
+const pdfInspectorPanel: HTMLElement = pdfInspector
 const midgardSystemPanel: HTMLElement = midgardSystem
 mountMidgardStaff(midgardSystemStaffs)
 if (!settingsSection) throw new Error('Song Settings were not found')
@@ -104,11 +107,15 @@ changeSongButton.addEventListener('click', () => {
   void returnToLibrary()
 })
 
-musicalForm.addEventListener('change', (event) => {
+musicalForm.addEventListener('click', (event) => {
   const target = event.target
-  if (!(target instanceof HTMLInputElement) || target.name !== 'sheetSystem') return
+  if (!(target instanceof Element)) return
+  const choice = target.closest('[data-score-view]')
+  if (!(choice instanceof HTMLButtonElement)) return
   if (view.mode !== 'edit-song' || loaded === undefined) return
-  renderEngraving(engravingPanel, loaded.song, notationSystem(target.value))
+  const next = scoreView(choice.dataset.scoreView)
+  selectScoreView(next)
+  showScoreView(next, loaded.song)
 })
 
 editNamesButton.addEventListener('click', () => {
@@ -260,7 +267,9 @@ function clearOpenSong(): void {
   loaded = undefined
   pdfFrame.removeAttribute('src')
   pdfFrame.title = 'Original sheet music'
+  engravingPanel.hidden = false
   engravingPanel.replaceChildren()
+  pdfInspectorPanel.hidden = true
   midgardSystemPanel.hidden = false
   storagePanel.replaceChildren()
 }
@@ -289,15 +298,32 @@ function showPdf(song: Song): void {
 function renderStoredSong(load: SongLoad): void {
   renderSongStatus(storagePanel, load)
   midgardSystemPanel.hidden = true
-  renderEngraving(engravingPanel, load.song, currentSheetSystem())
+  showScoreView(currentScoreView(), load.song)
 }
 
-function currentSheetSystem(): ReturnType<typeof notationSystem> {
-  const selected = musicalForm.querySelector<HTMLInputElement>('input[name="sheetSystem"]:checked')
-  return notationSystem(selected?.value)
+function currentScoreView(): ScoreView {
+  const selected = musicalForm.querySelector<HTMLButtonElement>('[data-score-view][aria-pressed="true"]')
+  return scoreView(selected?.dataset.scoreView)
 }
 
 function useClassicalSheet(): void {
-  const classical = musicalForm.querySelector<HTMLInputElement>('input[name="sheetSystem"][value="classical"]')
-  if (classical) classical.checked = true
+  selectScoreView('classical')
+}
+
+function selectScoreView(next: ScoreView): void {
+  for (const button of musicalForm.querySelectorAll<HTMLButtonElement>('[data-score-view]')) {
+    button.setAttribute('aria-pressed', button.dataset.scoreView === next ? 'true' : 'false')
+  }
+}
+
+function showScoreView(next: ScoreView, song: Song): void {
+  if (next === 'original-pdf') {
+    pdfInspectorPanel.hidden = false
+    engravingPanel.hidden = true
+    engravingPanel.replaceChildren()
+    return
+  }
+  pdfInspectorPanel.hidden = true
+  engravingPanel.hidden = false
+  renderEngraving(engravingPanel, song, next)
 }
