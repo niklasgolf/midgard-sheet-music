@@ -1,6 +1,7 @@
 import './style.css'
 import { chooseSongView, editNamesView, editSongView, type EditorView } from './editor/editor-state.ts'
 import { renderEngraving } from './notation/engraving-view.ts'
+import { notationSystem } from './notation/notation-system.ts'
 import { mountMidgardStaff } from './notation/midgard-staff-svg.ts'
 import type { SongLoad } from './song/import-chopin-song.ts'
 import { IndexedDBSongRepository } from './song/indexeddb-song-repository.ts'
@@ -67,7 +68,8 @@ const editNamesButton: HTMLButtonElement = editNames
 const storagePanel: HTMLElement = storage
 const namesPanel: HTMLElement = namesPage
 const namesReturnButton: HTMLButtonElement = namesReturn
-const settingsSection = settingsForm.closest('section')
+const musicalForm: HTMLFormElement = settingsForm
+const settingsSection = musicalForm.closest('section')
 const engravingPanel: HTMLElement = engraving
 const midgardSystemPanel: HTMLElement = midgardSystem
 mountMidgardStaff(midgardSystemStaffs)
@@ -85,7 +87,7 @@ const library = mountSongLibrary(songList, (song) => {
 
 const songs: SongRepository = new IndexedDBSongRepository()
 
-const settings = mountSongSettings(settingsForm, settingsStatus, songs, (song) => {
+const settings = mountSongSettings(musicalForm, settingsStatus, songs, (song) => {
   rememberOpenSong(song)
 })
 
@@ -99,6 +101,13 @@ const names = mountSongNames(namesForm, namesStatus, songs, (song) => {
 
 changeSongButton.addEventListener('click', () => {
   void returnToLibrary()
+})
+
+musicalForm.addEventListener('change', (event) => {
+  const target = event.target
+  if (!(target instanceof HTMLInputElement) || target.name !== 'sheetSystem') return
+  if (view.mode !== 'edit-song' || loaded === undefined) return
+  renderEngraving(engravingPanel, loaded.song, notationSystem(target.value))
 })
 
 editNamesButton.addEventListener('click', () => {
@@ -145,6 +154,7 @@ async function openSong(songId: string): Promise<void> {
   }
   view = editSongView(song.id)
   applyEditorChrome(song.metadata.title)
+  useClassicalSheet()
   showSong(song, true)
 }
 
@@ -269,5 +279,15 @@ function showPdf(song: Song): void {
 function renderStoredSong(load: SongLoad): void {
   renderSongStatus(storagePanel, load)
   midgardSystemPanel.hidden = true
-  renderEngraving(engravingPanel, load.song)
+  renderEngraving(engravingPanel, load.song, currentSheetSystem())
+}
+
+function currentSheetSystem(): ReturnType<typeof notationSystem> {
+  const selected = musicalForm.querySelector<HTMLInputElement>('input[name="sheetSystem"]:checked')
+  return notationSystem(selected?.value)
+}
+
+function useClassicalSheet(): void {
+  const classical = musicalForm.querySelector<HTMLInputElement>('input[name="sheetSystem"][value="classical"]')
+  if (classical) classical.checked = true
 }

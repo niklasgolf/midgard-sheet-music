@@ -6,10 +6,12 @@ import {
   pitchStaffStep,
   STAFF_LINE_COUNT,
   STAFF_SPACE,
+  STAFF_STEP,
   staffLineY,
   staffTopY,
   TREBLE_BOTTOM_DIATONIC,
 } from '../engraving/geometry.ts'
+import { MIDGARD_STAFF_HEIGHT, midgardLedgerYs, midgardNoteY } from '../engraving/midgard-geometry.ts'
 import { defaultStemDirection, noteheadExtent, placeChordNoteheads, type StemDirection } from '../engraving/chord-offset.ts'
 import {
   graceCenterX,
@@ -51,6 +53,8 @@ import type {
 } from '../interpretation/measure-content.ts'
 import { pitchCount } from '../interpretation/measure-content.ts'
 import type { PianoStaff } from '../interpretation/staff.ts'
+import { drawMidgardBarline, drawMidgardMeasureStaff } from './midgard-staff-svg.ts'
+import type { NotationSystem } from './notation-system.ts'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -69,9 +73,11 @@ export function measureSvg(options: {
   label: string
   content: MeasureContent
   timeSignature?: TimeSignature
+  system?: NotationSystem
 }): SVGSVGElement {
-  const placed = options.content.columns.map((column) => placeColumn(column))
-  const provisional = options.content.provisional.map((column) => placeProvisional(column))
+  const system = options.system ?? 'classical'
+  const placed = options.content.columns.map((column) => placeColumn(column, system))
+  const provisional = options.content.provisional.map((column) => placeProvisional(column, system))
   const extents = new Map<string, { left: number; right: number }>()
   for (const column of [...placed, ...provisional]) {
     const key = fractionKey(column.onset)
@@ -103,44 +109,50 @@ export function measureSvg(options: {
   })
   const width = spacing.contentRight + NOTE_AREA_RIGHT + STAFF_INSET
   const frame = grandStaffFrame()
+  const height = system === 'midgard' ? MIDGARD_STAFF_HEIGHT : frame.height
   const staffLeft = STAFF_INSET
   const staffRight = width - STAFF_INSET
   const notes = pitchCount(options.content)
 
   const svg = document.createElementNS(SVG_NS, 'svg')
-  svg.setAttribute('viewBox', `0 0 ${width} ${frame.height}`)
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`)
   svg.setAttribute('width', String(width))
-  svg.setAttribute('height', String(frame.height))
+  svg.setAttribute('height', String(height))
   svg.setAttribute('role', 'img')
+  svg.setAttribute('data-notation', system)
   const unresolved = options.content.unresolved.length
   const incomplete = unresolved === 0 ? '' : `, ${unresolved} unresolved`
   svg.setAttribute('aria-label', `${options.label}, ${notes} notes${incomplete}`)
 
-  drawStaff(svg, staffLeft, staffRight, frame.trebleBottomY)
-  drawStaff(svg, staffLeft, staffRight, frame.bassBottomY)
-  drawRightBarline(svg, staffRight, frame.trebleBottomY, frame.bassBottomY)
+  if (system === 'midgard') {
+    drawMidgardMeasureStaff(svg, staffLeft, staffRight)
+    drawMidgardBarline(svg, staffRight)
+  } else {
+    drawStaff(svg, staffLeft, staffRight, frame.trebleBottomY)
+    drawStaff(svg, staffLeft, staffRight, frame.bassBottomY)
+    drawRightBarline(svg, staffRight, frame.trebleBottomY, frame.bassBottomY)
+  }
 
   const ink: InkEvent[] = []
   for (const column of placed) {
     const anchorX = columnX(spacing, column.onset)
     for (const group of column.events) {
-      const bottomY = group.event.staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
-      ink.push({ placed: group, anchorX, bottomY })
+      ink.push({ placed: group, anchorX })
     }
   }
   const beams = stemNotes(svg, ink, options.timeSignature)
-  for (const item of ink) drawEvent(svg, frame, item.placed, item.anchorX)
+  for (const item of ink) drawEvent(svg, frame, item.placed, item.anchorX, system)
   for (const beam of beams) appendBeam(svg, beam.shape, beam.staff)
   for (const column of provisional) {
     const anchorX = columnX(spacing, column.onset)
     for (const group of column.events) {
-      drawProvisional(svg, frame, group, anchorX)
+      drawProvisional(svg, frame, group, anchorX, system)
     }
   }
-  drawTies(svg, frame, options.content.ties, placed, spacing, staffLeft, staffRight)
-  drawGraceNotes(svg, frame, options.content.graceNotes, placed, spacing)
+  drawTies(svg, options.content.ties, placed, spacing, staffLeft, staffRight, system)
+  drawGraceNotes(svg, frame, options.content.graceNotes, placed, spacing, system)
 
-  fitVerticalFrame(svg, width, frame.height)
+  fitVerticalFrame(svg, width, height)
   return svg
 }
 
@@ -175,12 +187,14 @@ type PlacedHead = {
   pitch: MeasurePitch
   offsetX: number
   staffStep: number
+  /** Notehead center. Classical and midGard both store the y they will draw. */
+  y: number
   displaced: boolean
 }
 
 type PlacedDot = {
   offsetX: number
-  staffStep: number
+  y: number
   midi: number
   startTick: number
 }
@@ -192,7 +206,7 @@ type PlacedEvent = {
   dots: PlacedDot[]
 }
 
-function placeColumn(column: RhythmicColumn): {
+function placeColumn(column: RhythmicColumn, system: NotationSystem): {
   onset: RhythmicColumn['onset']
   extent: { left: number; right: number }
   events: PlacedEvent[]
@@ -208,28 +222,30 @@ function placeColumn(column: RhythmicColumn): {
     const heads = event.pitches.map((pitch, index) => {
       const placement = placed[index]
       const offsetX = placement?.offsetX ?? 0
+      const staffStep = placement?.staffStep ?? steps[index] ?? 0
       offsets.push(offsetX)
       return {
         pitch,
         offsetX,
-        staffStep: placement?.staffStep ?? steps[index] ?? 0,
+        staffStep,
+        y: noteCenterY(system, event.staff, pitch.midi, staffStep),
         displaced: placement?.displaced ?? false,
       }
     })
     const dots: PlacedDot[] = []
     if (event.duration.dots === 1) {
       const positions = placeAugmentationDots(
-        heads.map((head) => ({ x: head.offsetX, staffStep: head.staffStep })),
+        heads.map((head) => ({ x: head.offsetX, staffStep: dotStep(system, head.pitch.midi, head.staffStep) })),
         NOTE_RX,
       )
       positions.forEach((position, index) => {
-        const pitch = heads[index]?.pitch
-        if (pitch === undefined) return
+        const head = heads[index]
+        if (head === undefined) return
         dots.push({
           offsetX: position.x,
-          staffStep: position.staffStep,
-          midi: pitch.midi,
-          startTick: pitch.startTick,
+          y: dotCenterY(system, event.staff, head, position.staffStep),
+          midi: head.pitch.midi,
+          startTick: head.pitch.startTick,
         })
         dotCenters.push(position.x)
       })
@@ -239,7 +255,7 @@ function placeColumn(column: RhythmicColumn): {
   return { onset: column.onset, extent: extentWithDots(offsets, NOTEHEAD_WIDTH, dotCenters), events }
 }
 
-function placeProvisional(column: ProvisionalColumn): {
+function placeProvisional(column: ProvisionalColumn, system: NotationSystem): {
   onset: ProvisionalColumn['onset']
   extent: { left: number; right: number }
   events: Array<ProvisionalEvent & { heads: PlacedHead[] }>
@@ -253,11 +269,13 @@ function placeProvisional(column: ProvisionalColumn): {
     const heads = event.pitches.map((pitch, index) => {
       const placement = placed[index]
       const offsetX = placement?.offsetX ?? 0
+      const staffStep = placement?.staffStep ?? steps[index] ?? 0
       offsets.push(offsetX)
       return {
         pitch,
         offsetX,
-        staffStep: placement?.staffStep ?? steps[index] ?? 0,
+        staffStep,
+        y: noteCenterY(system, event.staff, pitch.midi, staffStep),
         displaced: placement?.displaced ?? false,
       }
     })
@@ -271,19 +289,18 @@ function drawProvisional(
   frame: { trebleBottomY: number; bassBottomY: number },
   group: ProvisionalEvent & { heads: PlacedHead[] },
   anchorX: number,
+  system: NotationSystem,
 ): void {
+  const bottomY = group.staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
+  drawHeadLedgers(svg, group.heads, anchorX, bottomY, UNRESOLVED_INK, system)
   for (const head of group.heads) {
-    const x = anchorX + head.offsetX
-    const bottomY = group.staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
-    drawLedgerLines(svg, x, head.staffStep, bottomY, UNRESOLVED_INK)
-    drawNotehead(svg, head.pitch, group.staff, x, noteheadY(bottomY, head.staffStep), UNRESOLVED_INK)
+    drawNotehead(svg, head.pitch, group.staff, anchorX + head.offsetX, head.y, UNRESOLVED_INK)
   }
 }
 
 type InkEvent = {
   placed: PlacedEvent
   anchorX: number
-  bottomY: number
 }
 
 function stemNotes(
@@ -344,7 +361,7 @@ function eventStem(item: InkEvent, extension: number): StemGeometry | undefined 
     extension,
     heads: item.placed.heads.map((head) => ({
       x: item.anchorX + head.offsetX,
-      y: noteheadY(item.bottomY, head.staffStep),
+      y: head.y,
       staffStep: head.staffStep,
       displaced: head.displaced,
     })),
@@ -380,33 +397,20 @@ function drawEvent(
   frame: { trebleBottomY: number; bassBottomY: number },
   group: PlacedEvent,
   anchorX: number,
+  system: NotationSystem,
 ): void {
   const bottomY = group.event.staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
+  drawHeadLedgers(svg, group.heads, anchorX, bottomY, INK, system)
   for (const head of group.heads) {
-    drawPitch(svg, frame, group.event, head.pitch, anchorX + head.offsetX)
+    drawNotehead(svg, head.pitch, group.event.staff, anchorX + head.offsetX, head.y, INK)
   }
   for (const dot of group.dots) {
-    appendDot(svg, { x: anchorX + dot.offsetX, y: noteheadY(bottomY, dot.staffStep) }, INK, {
+    appendDot(svg, { x: anchorX + dot.offsetX, y: dot.y }, INK, {
       staff: group.event.staff,
       startTick: dot.startTick,
       midi: dot.midi,
     })
   }
-}
-
-function drawPitch(
-  svg: SVGSVGElement,
-  frame: { trebleBottomY: number; bassBottomY: number },
-  event: StaffEvent,
-  pitch: MeasurePitch,
-  x: number,
-): void {
-  const bottomY = event.staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
-  const bottomDiatonic = event.staff === 'bass' ? BASS_BOTTOM_DIATONIC : TREBLE_BOTTOM_DIATONIC
-  const step = pitchStaffStep(pitch.midi, bottomDiatonic)
-  const y = noteheadY(bottomY, step)
-  drawLedgerLines(svg, x, step, bottomY, INK)
-  drawNotehead(svg, pitch, event.staff, x, y, INK)
 }
 
 function drawStaff(svg: SVGSVGElement, x1: number, x2: number, bottomY: number): void {
@@ -437,6 +441,83 @@ function drawRightBarline(
   line.setAttribute('stroke', INK)
   line.setAttribute('stroke-width', '1.25')
   line.setAttribute('data-barline', 'right')
+  svg.append(line)
+}
+
+function noteCenterY(system: NotationSystem, staff: PianoStaff, midi: number, staffStep: number): number {
+  if (system === 'midgard') return midgardNoteY(midi)
+  const frame = grandStaffFrame()
+  const bottomY = staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
+  return noteheadY(bottomY, staffStep)
+}
+
+/** Even steps are lines. MidGard lines fall on odd MIDI numbers, so the step is midi + 1. */
+function dotStep(system: NotationSystem, midi: number, staffStep: number): number {
+  return system === 'midgard' ? midi + 1 : staffStep
+}
+
+function dotCenterY(system: NotationSystem, staff: PianoStaff, head: PlacedHead, placedStep: number): number {
+  if (system === 'midgard') return head.y - (placedStep - (head.pitch.midi + 1)) * STAFF_STEP
+  const frame = grandStaffFrame()
+  const bottomY = staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
+  return noteheadY(bottomY, placedStep)
+}
+
+function drawHeadLedgers(
+  svg: SVGSVGElement,
+  heads: readonly PlacedHead[],
+  anchorX: number,
+  bottomY: number,
+  color: string,
+  system: NotationSystem,
+): void {
+  if (system !== 'midgard') {
+    for (const head of heads) drawLedgerLines(svg, anchorX + head.offsetX, head.staffStep, bottomY, color)
+    return
+  }
+  const spans: Array<{ y: number; x1: number; x2: number }> = []
+  for (const head of heads) {
+    const x = anchorX + head.offsetX
+    for (const y of midgardLedgerYs(head.pitch.midi)) spans.push({ y, x1: x - STAFF_SPACE, x2: x + STAFF_SPACE })
+  }
+  for (const span of mergeLedgerSpans(spans)) drawLedgerSpan(svg, span.x1, span.x2, span.y, color)
+}
+
+function mergeLedgerSpans(
+  spans: readonly { y: number; x1: number; x2: number }[],
+): Array<{ y: number; x1: number; x2: number }> {
+  const byLine = new Map<number, Array<{ x1: number; x2: number }>>()
+  for (const span of spans) {
+    const line = byLine.get(span.y) ?? []
+    line.push({ x1: span.x1, x2: span.x2 })
+    byLine.set(span.y, line)
+  }
+  const merged: Array<{ y: number; x1: number; x2: number }> = []
+  for (const [y, line] of byLine) {
+    line.sort((left, right) => left.x1 - right.x1)
+    let current = line[0]
+    if (current === undefined) continue
+    for (const next of line.slice(1)) {
+      if (next.x1 <= current.x2) current = { x1: current.x1, x2: Math.max(current.x2, next.x2) }
+      else {
+        merged.push({ y, x1: current.x1, x2: current.x2 })
+        current = next
+      }
+    }
+    merged.push({ y, x1: current.x1, x2: current.x2 })
+  }
+  return merged
+}
+
+function drawLedgerSpan(svg: SVGSVGElement, x1: number, x2: number, y: number, color: string): void {
+  const line = document.createElementNS(SVG_NS, 'line')
+  line.setAttribute('x1', String(x1))
+  line.setAttribute('x2', String(x2))
+  line.setAttribute('y1', String(y))
+  line.setAttribute('y2', String(y))
+  line.setAttribute('stroke', color)
+  line.setAttribute('stroke-width', '1.25')
+  line.setAttribute('data-ledger', 'midgard')
   svg.append(line)
 }
 
@@ -493,14 +574,14 @@ type TieAnchor = {
 
 function drawTies(
   svg: SVGSVGElement,
-  frame: { trebleBottomY: number; bassBottomY: number },
   ties: readonly MeasureTie[],
   placed: ReturnType<typeof placeColumn>[],
   spacing: MeasureSpacing,
   staffLeft: number,
   staffRight: number,
+  system: NotationSystem,
 ): void {
-  const anchors = tieAnchors(frame, placed, spacing)
+  const anchors = tieAnchors(placed, spacing)
   const prepared = ties.map((tie) => {
     const from = anchorFor(anchors, tie, tie.fromStartTick)
     const to = anchorFor(anchors, tie, tie.toStartTick)
@@ -519,8 +600,7 @@ function drawTies(
   for (const [index, item] of prepared.entries()) {
     const { tie, from, to, step } = item
     const side = tieSideForChord(step, tiedGroupSteps(index, onsets))
-    const bottomY = tie.staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
-    const openY = tieAttachmentY(noteheadY(bottomY, step), side, NOTE_RY)
+    const openY = tieAttachmentY(noteCenterY(system, tie.staff, tie.midi, step), side, NOTE_RY)
     const startY = from === undefined ? openY : tieAttachmentY(from.y, side, NOTE_RY)
     const endY = to === undefined ? openY : tieAttachmentY(to.y, side, NOTE_RY)
     if (tie.role === 'complete' && (from === undefined || to === undefined)) continue
@@ -581,6 +661,7 @@ function drawGraceNotes(
   graceNotes: readonly MeasureGraceNote[],
   placed: ReturnType<typeof placeColumn>[],
   spacing: MeasureSpacing,
+  system: NotationSystem,
 ): void {
   for (const column of placed) {
     const anchorX = columnX(spacing, column.onset)
@@ -597,9 +678,8 @@ function drawGraceNotes(
           .sort((left, right) => right.startTick - left.startTick || right.midi - left.midi)
         const principalX = anchorX + head.offsetX
         const bottomY = group.event.staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
-        const principalY = noteheadY(bottomY, head.staffStep)
         attached.forEach((grace, index) => {
-          drawOneGrace(svg, grace, index, principalX, principalY, bottomY)
+          drawOneGrace(svg, grace, index, principalX, head.y, bottomY, system)
         })
       }
     }
@@ -613,14 +693,19 @@ function drawOneGrace(
   principalX: number,
   principalY: number,
   bottomY: number,
+  system: NotationSystem,
 ): void {
   const bottom = grace.staff === 'bass' ? BASS_BOTTOM_DIATONIC : TREBLE_BOTTOM_DIATONIC
   const step = pitchStaffStep(grace.midi, bottom)
   const radii = graceRadii(NOTE_RX, NOTE_RY)
   const x = graceCenterX(principalX, indexFromPrincipal, NOTE_RX)
-  const y = noteheadY(bottomY, step)
+  const y = noteCenterY(system, grace.staff, grace.midi, step)
   const direction = defaultStemDirection([step])
-  drawLedgerLines(svg, x, step, bottomY, INK)
+  if (system === 'midgard') {
+    for (const ledgerY of midgardLedgerYs(grace.midi)) drawLedgerSpan(svg, x - STAFF_SPACE, x + STAFF_SPACE, ledgerY, INK)
+  } else {
+    drawLedgerLines(svg, x, step, bottomY, INK)
+  }
 
   const head = document.createElementNS(SVG_NS, 'ellipse')
   head.setAttribute('cx', String(x))
@@ -707,23 +792,18 @@ function drawOneGrace(
   }
 }
 
-function tieAnchors(
-  frame: { trebleBottomY: number; bassBottomY: number },
-  placed: ReturnType<typeof placeColumn>[],
-  spacing: MeasureSpacing,
-): TieAnchor[] {
+function tieAnchors(placed: ReturnType<typeof placeColumn>[], spacing: MeasureSpacing): TieAnchor[] {
   const anchors: TieAnchor[] = []
   for (const column of placed) {
     const anchorX = columnX(spacing, column.onset)
     for (const group of column.events) {
-      const bottomY = group.event.staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
       for (const head of group.heads) {
         anchors.push({
           midi: head.pitch.midi,
           startTick: head.pitch.startTick,
           staff: group.event.staff,
           x: anchorX + head.offsetX,
-          y: noteheadY(bottomY, head.staffStep),
+          y: head.y,
           staffStep: head.staffStep,
         })
       }

@@ -1,21 +1,34 @@
-import { STAFF_SPACE } from '../engraving/geometry.ts'
+import {
+  MIDGARD_BLUE,
+  MIDGARD_LINE,
+  MIDGARD_PINK,
+  MIDGARD_SPACE,
+  MIDGARD_STAFF_HEIGHT,
+  MIDGARD_STAFF_WIDTH,
+  MIDGARD_STROKE,
+  midgardGroupLines,
+  midgardGroupTop,
+  midgardNoteY,
+  midgardPairTop,
+  MIDGARD_GROUP_COLORS,
+  MIDGARD_GROUP_COUNT,
+} from '../engraving/midgard-geometry.ts'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
 /** Same center-to-center distance as a classical staff line. */
-const SPACE = STAFF_SPACE
+const SPACE = MIDGARD_SPACE
 /** Matches the classical staff stroke, so the two systems share one scale. */
-const STROKE = 1.25
-/** The reference staff is 25 spaces from border to border. */
+const STROKE = MIDGARD_STROKE
 const WIDTH_SPACES = 25
 const LINES_PER_ZONE = 4
 const ZONE_SPACES = LINES_PER_ZONE - 1
 /** Each white gap is three staff spaces, inside a frame and between frames. */
 const GAP_SPACES = 3
 const PAIR_SPACES = ZONE_SPACES + GAP_SPACES + ZONE_SPACES
-const PINK = '#FEEFEE'
-const BLUE = '#ECF3FD'
-const LINE_INK = '#000000'
+const PINK = MIDGARD_PINK
+const BLUE = MIDGARD_BLUE
+const LINE_INK = MIDGARD_LINE
 /** Filled ellipse, the same size and color as a classical notehead. */
 const NOTE_RX = 8
 const NOTE_RY = 5.5
@@ -30,8 +43,8 @@ const ZONE_PAIRS = [
   [PINK, PINK],
 ] as const
 
-const STAFF_WIDTH = WIDTH_SPACES * SPACE + STROKE
-const STAFF_HEIGHT = (ZONE_PAIRS.length * PAIR_SPACES + (ZONE_PAIRS.length - 1) * GAP_SPACES) * SPACE + STROKE
+const STAFF_WIDTH = MIDGARD_STAFF_WIDTH
+const STAFF_HEIGHT = MIDGARD_STAFF_HEIGHT
 
 /**
  * One experimental midGard staff. The proportions come from public/midgard-staff.png,
@@ -59,7 +72,7 @@ export function midgardStaffSvg(options: { noteOffset?: number; octave: number; 
   appendLedgerPair(svg, pairTop(1) + ZONE_SPACES * SPACE, STROKE / 2 + SPACE)
   appendLedgerPair(svg, bottomGap + noteOffset, STROKE / 2 + SPACE)
   appendLedgerPair(svg, bottomGap + noteOffset, testNoteX(1) - SPACE)
-  appendTestNotes(svg, bottomGap, noteOffset, options.octave, options.highlightMiddleC === true)
+  appendTestNotes(svg, noteOffset, options.octave, options.highlightMiddleC === true)
   return svg
 }
 
@@ -84,7 +97,7 @@ function staffCopy(options: { octave: number; noteOffset?: number; highlightMidd
 }
 
 function pairTop(index: number): number {
-  return STROKE / 2 + index * (PAIR_SPACES + GAP_SPACES) * SPACE
+  return midgardPairTop(index)
 }
 
 function appendZone(svg: SVGSVGElement, top: number, color: string): void {
@@ -147,22 +160,13 @@ function testNoteX(index: number): number {
 
 function appendTestNotes(
   svg: SVGSVGElement,
-  bottomGap: number,
   noteOffset: number,
   octave: number,
   highlightMiddleC: boolean,
 ): void {
-  const yByIndex = [
-    bottomGap + 2 * SPACE + SPACE / 2,
-    bottomGap + 1.5 * SPACE,
-    bottomGap + SPACE / 2,
-    bottomGap,
-    bottomGap - SPACE,
-    bottomGap - 2 * SPACE,
-    bottomGap - 3 * SPACE,
-  ]
+  const semitones = [0, 2, 4, 5, 7, 9, 11]
   for (let index = 0; index < TEST_NOTE_COUNT; index += 1) {
-    const y = yByIndex[index] + noteOffset
+    const y = midgardNoteY(48 + (semitones[index] ?? 0)) + noteOffset
     const name = `${NOTE_NAMES[index]}${octave}`
     const ink = highlightMiddleC && name === 'C4' ? MIDDLE_C_GREEN : NOTE_INK
     const x = testNoteX(index)
@@ -188,6 +192,49 @@ function appendTestNotes(
 
 function appendRule(svg: SVGSVGElement, x: number, y: number, width: number, height: number): void {
   appendRect(svg, x, y, width, height, LINE_INK)
+}
+
+/** The six colored groups, stretched across one measure and not scaled vertically. */
+export function drawMidgardMeasureStaff(svg: SVGSVGElement, x1: number, x2: number): void {
+  for (let index = 0; index < MIDGARD_GROUP_COUNT; index += 1) {
+    const lines = midgardGroupLines(index)
+    const color = MIDGARD_GROUP_COLORS[index] ?? MIDGARD_PINK
+    for (let band = 0; band < lines.length - 1; band += 1) {
+      const upper = lines[band]
+      const lower = lines[band + 1]
+      if (upper === undefined || lower === undefined) continue
+      appendRect(svg, x1, upper + STROKE / 2, x2 - x1, lower - upper - STROKE, color)
+    }
+    for (const y of lines) appendStaffLine(svg, x1, x2, y)
+  }
+}
+
+/** Right barline from the top line of the upper group to the bottom line of the lower group. */
+export function drawMidgardBarline(svg: SVGSVGElement, x: number): void {
+  const top = midgardGroupTop(0)
+  const bottomLines = midgardGroupLines(MIDGARD_GROUP_COUNT - 1)
+  const bottom = bottomLines[bottomLines.length - 1] ?? top
+  const line = document.createElementNS(SVG_NS, 'line')
+  line.setAttribute('x1', String(x))
+  line.setAttribute('x2', String(x))
+  line.setAttribute('y1', String(top))
+  line.setAttribute('y2', String(bottom))
+  line.setAttribute('stroke', LINE_INK)
+  line.setAttribute('stroke-width', String(STROKE))
+  line.setAttribute('data-barline', 'right')
+  svg.append(line)
+}
+
+function appendStaffLine(svg: SVGSVGElement, x1: number, x2: number, y: number): void {
+  const line = document.createElementNS(SVG_NS, 'line')
+  line.setAttribute('x1', String(x1))
+  line.setAttribute('x2', String(x2))
+  line.setAttribute('y1', String(y))
+  line.setAttribute('y2', String(y))
+  line.setAttribute('stroke', LINE_INK)
+  line.setAttribute('stroke-width', String(STROKE))
+  line.setAttribute('data-midgard-line', 'true')
+  svg.append(line)
 }
 
 function appendRect(

@@ -6,13 +6,14 @@ import { resolveWrittenOnset } from '../interpretation/written-onset.ts'
 import { completeMeasureRequest, measuresPerRowCount, type Song, type TimeSignature } from '../song/song.ts'
 import { displayedMeasures } from './written-measures.ts'
 import { measureSvg } from './piano-measure-svg.ts'
+import type { NotationSystem } from './notation-system.ts'
 
 /** Draws the selected measures from the stored Song. The SVGs are not saved. */
-export function renderEngraving(container: HTMLElement, song: Song): void {
+export function renderEngraving(container: HTMLElement, song: Song, system: NotationSystem = 'classical'): void {
   const title = document.createElement('h2')
   title.id = 'engraving-title'
   title.className = 'engraving__title'
-  title.textContent = 'Traditional Sheet Music — SVG Experiment'
+  title.textContent = system === 'midgard' ? 'midGard Sheet Music' : 'Traditional Sheet Music — SVG Experiment'
 
   const interpretation = song.musicalInterpretation
   const plan = displayedMeasures(interpretation, song.originalMidi.notes, completeMeasureRequest(song))
@@ -58,6 +59,7 @@ export function renderEngraving(container: HTMLElement, song: Song): void {
         timeSignature,
         staves.staffByTrack,
         staves.staffForNote,
+        system,
       ),
     )
   }
@@ -73,6 +75,7 @@ function measureBlock(
   timeSignature: TimeSignature,
   staffByTrack: ReadonlyMap<number, PianoStaff>,
   staffForNote: (note: MidiNote) => PianoStaff | undefined,
+  system: NotationSystem,
 ): HTMLElement {
   const item = document.createElement('div')
   item.className = 'engraving__item'
@@ -99,7 +102,7 @@ function measureBlock(
   })
   const frame = document.createElement('div')
   frame.className = 'measure'
-  frame.append(measureSvg({ label, content, timeSignature }))
+  frame.append(measureSvg({ label, content, timeSignature, system }))
   item.append(name, ticks, frame)
   if (content.unresolved.length > 0) item.append(unresolvedWarning(content.unresolved))
   return item
