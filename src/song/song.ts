@@ -71,6 +71,20 @@ export type GraceNotePrincipal = {
 }
 
 /**
+ * One MIDI event that belongs to the performance and is not a separate written note.
+ * The identity is the original event: track, pitch, onset, and ending.
+ * The ending may equal the onset. That is a zero-duration event.
+ * Pitch and onset alone are not enough when another event shares them.
+ * The event stays in Part B. Drawing leaves it out, and it is not unresolved.
+ */
+export type OmittedNoteReading = {
+  track: number
+  midi: number
+  startTick: number
+  endTick: number
+}
+
+/**
  * One ornamental MIDI event written as a small note before its principal attack.
  * Several readings may name the same principal. They do not add a counted beat.
  */
@@ -138,6 +152,11 @@ export type MusicalInterpretation = {
    * Absent until an interpretation is stored.
    */
   graceNotes?: readonly GraceNoteReading[]
+  /**
+   * MIDI events that are kept in the performance and left out of the written score.
+   * Absent until an interpretation is stored.
+   */
+  omittedNotes?: readonly OmittedNoteReading[]
 }
 
 /** How many complete written measures the page draws for one Song. A pickup is extra. */
@@ -272,6 +291,9 @@ function isInterpretation(value: unknown): value is MusicalInterpretation {
   if (interpretation.graceNotes !== undefined && !isGraceNotes(interpretation.graceNotes)) {
     return false
   }
+  if (interpretation.omittedNotes !== undefined && !isOmittedNotes(interpretation.omittedNotes)) {
+    return false
+  }
   if (interpretation.writtenStartTick !== undefined && !isWrittenStartTick(interpretation.writtenStartTick)) {
     return false
   }
@@ -390,6 +412,30 @@ function isWrittenDuration(value: unknown): value is WrittenDurationReading {
 
 function isGraceNotes(value: unknown): value is readonly GraceNoteReading[] {
   return Array.isArray(value) && value.every(isGraceNote)
+}
+
+function isOmittedNotes(value: unknown): value is readonly OmittedNoteReading[] {
+  return Array.isArray(value) && value.every(isOmittedNote)
+}
+
+/** An omitted event may end on its onset. A sustained spelling cannot. */
+function isOmittedNote(value: unknown): value is OmittedNoteReading {
+  if (value === null || typeof value !== 'object') return false
+  const reading = value as Partial<OmittedNoteReading>
+  return (
+    Number.isInteger(reading.track) &&
+    reading.track !== undefined &&
+    reading.track >= 1 &&
+    Number.isInteger(reading.midi) &&
+    reading.midi !== undefined &&
+    reading.midi >= 0 &&
+    reading.midi <= 127 &&
+    typeof reading.startTick === 'number' &&
+    Number.isFinite(reading.startTick) &&
+    typeof reading.endTick === 'number' &&
+    Number.isFinite(reading.endTick) &&
+    reading.endTick >= reading.startTick
+  )
 }
 
 function isGraceNote(value: unknown): value is GraceNoteReading {

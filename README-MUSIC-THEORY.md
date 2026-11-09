@@ -140,6 +140,8 @@ The page does not fill these in from the PDF, from PPQ, or from a time-signature
 
 **Grace notes.** A grace note is an ornament attached to a principal written note. It is not part of the bar’s beat count, and it does not create a rhythmic column. A `graceNotes` entry keeps the original MIDI event, names the principal note by track, pitch, and onset, and records the ornamental written value together with whether it has a slash and whether a short slur joins it to the principal note. Several grace notes may name the same principal. The short slur is phrasing for that ornament. It is not a duration tie, and it is not stored as one. Song B’s Bar 15 grace note is one unslashed eighth A4 slurred to the A4 that begins at tick 16896.
 
+**Omitted events.** A performed MIDI event can be present in the file and still not be a separate written note. An `omittedNotes` entry names that event by track, pitch, onset, and ending, and drawing skips it. It produces no notehead, stem, beam, ledger line, or unresolved warning. The MIDI event stays in Part B, and the entry can be removed later. The ending is part of the name. Two events can share a pitch and an onset when one of them ends immediately, and the longer event is a different note. This is not the word “omitted” used for a missing `ties` list. A missing `ties` list still means every junction of a sustained note is tied. Song Settings does not show `omittedNotes`, and saving Song Settings leaves the list in place. The étude’s two Bar 1 readings are the example.
+
 **Not stored yet.** The following still belong in Part C, but they are not written into the Song today:
 
 - Measure boundaries, if we decide to save them rather than only derive them
@@ -148,7 +150,7 @@ The page does not fill these in from the PDF, from PPQ, or from a time-signature
 - Enharmonic spelling
 - Other corrections to how an imported note is understood
 
-Song Settings writes the fields it owns and leaves any other interpretation properties in place. A future Music Editor will add the note-level fields. Neither one replaces Part B.
+Song Settings writes the fields it owns and leaves any other interpretation properties in place, including `sustainedNotes`, `writtenDurations`, `graceNotes`, and `omittedNotes`. A future Music Editor will add the note-level fields. Neither one replaces Part B.
 
 The barlines used by the current SVG are calculated when the page is drawn. They are products of the time signature, the pickup duration, and ticks per written quarter. They are not piece-specific numbers written into the renderer, and they are not a separate database record.
 
@@ -173,7 +175,7 @@ In Song B’s file, PPQ is 384, and the development reading uses a written quart
 | Song operations | `SongRepository` in `src/song/song-repository.ts` |
 | Current database | `IndexedDBSongRepository` in `src/song/indexeddb-song-repository.ts`, using `src/song/song-database.ts` |
 
-No schema migration was required for a second Song, for a third Song, for an optional PDF filename, for `sustainedNotes`, for a written start tick, for a staff split pitch, or for a display choice stored beside the interpretation. Those fields are optional. The database version stays 1. `Song` has `id`, `schemaVersion` (currently 1), `metadata`, `originalMidi`, and `musicalInterpretation`. `originalMidi` is the parser’s own `MidiFile` type. The parser result is plain data, so IndexedDB structured clone can store it.
+No schema migration was required for a second Song, for a third Song, for an optional PDF filename, for `sustainedNotes`, for a written start tick, for a staff split pitch, for a display choice stored beside the interpretation, or for `omittedNotes`. Those fields are optional. A Song saved before this reading has no `omittedNotes` field, and every one of its events is still drawn. The database version stays 1. `Song` has `id`, `schemaVersion` (currently 1), `metadata`, `originalMidi`, and `musicalInterpretation`. `originalMidi` is the parser’s own `MidiFile` type. The parser result is plain data, so IndexedDB structured clone can store it.
 
 ### The repository
 
@@ -209,7 +211,7 @@ The right panel has three screens. All keep the title **The midGard Sheet Music 
 
 A refresh always opens Choose a Song. The page does not reopen the Song that was on screen. That choice is temporary editor navigation, held in `EditorView` while the page is open. It is not written into Part C, Song Settings, or IndexedDB. The saved spelling is still in Song B, and drawing reads it only after that Song is chosen again. Edit Mode shows those control rows, then Song Storage — IndexedDB, and Edit Names at the bottom of the panel. Choose a Song hides those sections, clears the PDF and the classical score, and shows The midGard System in the center column. Edit Names hides those sections in the right panel only. The temporary note list has been removed. Edit Names writes only the title and composer. It leaves the Song id, the MIDI filename, the PDF filename, Part B, Part C, and the display choice unchanged.
 
-Song Settings updates the existing id with `saveSong`. The write keeps the id, the schema version, the source filename, the original MIDI, and interpretation fields the form does not edit, including `sustainedNotes`, `writtenDurations`, and `graceNotes`. It does not insert a second Song, and it does not change any other Song.
+Song Settings updates the existing id with `saveSong`. The write keeps the id, the schema version, the source filename, the original MIDI, and interpretation fields the form does not edit, including `sustainedNotes`, `writtenDurations`, `graceNotes`, and `omittedNotes`. It does not insert a second Song, and it does not change any other Song.
 
 There is still no general file-picker import and no portable Song file.
 
@@ -348,7 +350,7 @@ The whole composition is not one enormous SVG. The right hand and the left hand 
 
 This is a rule for the picture. It is not a rule for the database. The Song remains one IndexedDB record, however many measure divs the page builds.
 
-**Implemented today.** A MIDI note is selected for a measure when its onset satisfies `startTick <= note.startTick < endTick`, after the span’s edges are rounded to whole ticks. The stored MIDI event stays intact. When Part C spells that event, each written note is drawn in the measure where that written note begins, and each tied junction is drawn in the SVG that contains it. A duration that is not a catalog value, and that has no stored spelling, stays unresolved. Its notehead is still drawn, in the measure where it begins, and it is not given an invented duration.
+**Implemented today.** A MIDI note is selected for a measure when its onset satisfies `startTick <= note.startTick < endTick`, after the span’s edges are rounded to whole ticks. The stored MIDI event stays intact. An event named by `omittedNotes` is not selected. It is not drawn, and it is not counted as unresolved. When Part C spells another event, each written note is drawn in the measure where that written note begins, and each tied junction is drawn in the SVG that contains it. A duration that is not a catalog value, and that has no stored spelling, stays unresolved. Its notehead is still drawn, in the measure where it begins, and it is not given an invented duration.
 
 ## 8. Musical graphics are SVG
 
@@ -904,7 +906,9 @@ The opening spans, at 480 ticks per written quarter, are:
 
 The saved display choice is 5 complete measures and 3 per row. The pickup is extra, so the page shows Bars 0–5 in two rows of three. Choosing 6 complete measures also draws Bar 6. The rest of the 1,926 notes remain in Part B, and a larger display count draws them with the same settings.
 
-In Classical, the six opening bars are fitted to the three columns. Their comfortable spacing was wider than the cell, so the rightmost noteheads were cut off by the cell. The fitted spacing keeps those noteheads inside the measure. midGard does not use that fit. Every midGard bar, including Bar 0, has one shared width, and the eighth pickup sits at 75% of a full 960-tick timeline. The opening is not yet a clean engraving. Bar 0’s B3 lasts 239 ticks and is read as an eighth. Many other attacks last 119 ticks and are read as eighths. Notes of 113 ticks are seven ticks short of an eighth, so they stay unresolved. Each bass downbeat in these bars also contains a zero-duration duplicate of the sounding bass note. The file has 48 such notes. A zero duration has no written value. The longer accompaniment notes, often 227 or 455 ticks, are not catalog durations either. No sustained-note spelling, written-duration override, or grace note has been stored. Classical is selected when the Song is opened. midGard uses the same six bars and the same Part B and Part C.
+In Classical, the six opening bars are fitted to the three columns. Their comfortable spacing was wider than the cell, so the rightmost noteheads were cut off by the cell. The fitted spacing keeps those noteheads inside the measure. midGard does not use that fit. Every midGard bar, including Bar 0, has one shared width, and the eighth pickup sits at 75% of a full 960-tick timeline. The opening is not yet a clean engraving. Bar 0’s B3 lasts 239 ticks and is read as an eighth. Many other attacks last 119 ticks and are read as sixteenths. Notes of 113 ticks are seven ticks short of a sixteenth, so they stay unresolved. Each bass downbeat in these bars also contains a zero-duration duplicate of the sounding bass note. The file has 48 such notes. A zero duration has no written value. The longer accompaniment notes, often 227 or 455 ticks, are not catalog durations either. No sustained-note spelling, written-duration override, or grace note has been stored. Classical is selected when the Song is opened. midGard uses the same six bars and the same Part B and Part C.
+
+Bar 1, ticks 240–1200, has two of those zero-duration duplicates. Track 2 has an E2 from tick 240 to tick 240 beside the E2 from tick 240 to tick 695, and a B1 from tick 720 to tick 720 beside the B1 from tick 720 to tick 1175. Part C stores exactly those two short events on `omittedNotes`. Drawing skips them in both sheet systems, so they are not crimson noteheads and they are not part of Bar 1’s unresolved count. The longer E2 and the longer B1 stay in the score and stay unresolved. The other 46 zero-duration notes are unchanged. Startup adds the two readings when the MIDI events are still there and the readings are absent. A second startup does not write them again. Songs A, B, and C are not given this list.
 
 ## 15. Beams
 
@@ -936,7 +940,7 @@ Under the heading **Traditional Sheet Music — SVG Experiment**, the page draws
 
 Each measure is one div and one SVG. The grid places the song’s chosen number of measures on each row, 3 when that choice has not been saved, and 2 for Song C’s first saved choice. The SVG height is the height the engraving calculated. Classical width starts from rhythmic spacing: a fixed clearance between facing noteheads, then 48 pixels for each written quarter between them. Before the notes are placed, the renderer measures the grid cell and subtracts the measure’s border and padding. If the comfortable width fits that cell, it is used unchanged. If it does not, the quarter-pixels shrink until the noteheads, dots, and the right margin fit. A longer written gap gives up more room than a shorter one. The clearance itself does not shrink, and a short measure is not stretched to fill the cell. Changing the row changes that available width, not the staff or the viewBox height. A measure that cannot fit even at the clearance stays at that minimum, scrolls inside its cell, and says that it was not overlapped. midGard does not shrink or stretch a bar to the cell. Every midGard measure uses the Song’s measure width and the written-tick timeline. A width wider than the cell scrolls. A width that crowds the notes keeps the written positions and says so.
 
-For the selected Song, a recognized note is drawn with its notehead, its ledger lines, its stem when the duration has one, and its dot when the duration has one. Eighths and sixteenths that share a beat also receive a beam, inside that measure’s SVG. An unresolved note is drawn as a crimson notehead at its real onset. The warning under the measure lists the track, pitch, onset, duration, and the reason. The original MIDI is not changed.
+For the selected Song, a recognized note is drawn with its notehead, its ledger lines, its stem when the duration has one, and its dot when the duration has one. Eighths and sixteenths that share a beat also receive a beam, inside that measure’s SVG. An unresolved note is drawn as a crimson notehead at its real onset. The warning under the measure lists the track, pitch, onset, duration, and the reason. An omitted MIDI event is absent from that SVG and from that warning. The original MIDI is not changed.
 
 The hand on the staff comes from track order, or from the staff split pitch when the Song has one track, as section 9 describes. The measures read `originalMidi` and `musicalInterpretation` from the stored Song. Switching Songs redraws the PDF, the measures, the settings, and that Song’s display choice.
 
@@ -987,6 +991,7 @@ Implemented:
 - Song B’s Bar 11 C♯5 and E5 spellings, each a sixteenth tied to a quarter, then a repeated quarter, stored in Part C
 - A written duration that can differ from the MIDI note-off, stored on `writtenDurations`, without creating a tie
 - A grace note stored on `graceNotes`: smaller head, short stem, ornamental flag, optional slash, and an optional short slur, placed before its principal note and left out of the beat count
+- An omitted MIDI event stored on `omittedNotes`: the event stays in Part B and is left out of both sheet systems, including the unresolved count. The étude uses this for Bar 1’s zero-duration E2 and B1
 - Song B’s Bar 15 sixteenth A4 and its one unslashed grace-note A4, stored in Part C
 - Song B’s principal A4, written as a half note in Bar 15 tied to a half note in Bar 16, using the existing Split Tie
 - A local copy of the VexFlow source, kept for study and not used as the renderer

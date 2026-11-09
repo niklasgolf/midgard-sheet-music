@@ -6,7 +6,7 @@ import { mountMidgardStaff } from './notation/midgard-staff-svg.ts'
 import type { SongLoad } from './song/import-chopin-song.ts'
 import { IndexedDBSongRepository } from './song/indexeddb-song-repository.ts'
 import { mountSheetDisplay } from './song/display-view.ts'
-import { installEtudeFoundation } from './song/install-etude.ts'
+import { installEtudeFoundation, installEtudeOmissions } from './song/install-etude.ts'
 import { installSongCFoundation } from './song/install-song-c.ts'
 import { installSongBInterpretations } from './song/install-sustained-reading.ts'
 import { ensureProjectSongs, pdfUrlForSong } from './song/project-songs.ts'
@@ -124,10 +124,16 @@ ensureProjectSongs(songs)
     const correction = await installSongBInterpretations(songs)
     const songC = await installSongCFoundation(songs)
     const etude = await installEtudeFoundation(songs)
+    const etudeOmissions = await installEtudeOmissions(songs)
     importedIds = new Set(libraryLoad.importedIds)
     librarySongs = await songs.listSongs()
     showLibrary()
-    const correctionMessage = [installMessage(correction), installMessage(songC), installMessage(etude)]
+    const correctionMessage = [
+      installMessage(correction),
+      installMessage(songC),
+      installMessage(etude),
+      installMessage(etudeOmissions),
+    ]
       .filter((message) => message !== '')
       .join(' ')
     if (correctionMessage !== '') {

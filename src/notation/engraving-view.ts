@@ -157,6 +157,7 @@ function measureBlock(
     sustainedNotes: song.musicalInterpretation.sustainedNotes,
     writtenDurations: song.musicalInterpretation.writtenDurations,
     graceNotes: song.musicalInterpretation.graceNotes,
+    omittedNotes: song.musicalInterpretation.omittedNotes,
     writtenOnsetTick: (note) => resolveWrittenOnset(note.startTick, song.musicalInterpretation),
   })
   const frame = document.createElement('div')

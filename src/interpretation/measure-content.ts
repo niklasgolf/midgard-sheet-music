@@ -1,6 +1,14 @@
 import type { MidiNote } from '../midi/parse-midi.ts'
-import type { GraceNotePrincipal, GraceNoteReading, NoteValue, SustainedNoteReading, WrittenDurationReading } from '../song/song.ts'
+import type {
+  GraceNotePrincipal,
+  GraceNoteReading,
+  NoteValue,
+  OmittedNoteReading,
+  SustainedNoteReading,
+  WrittenDurationReading,
+} from '../song/song.ts'
 import { matchGraceNote } from './grace-note.ts'
+import { matchOmittedNote } from './omitted-note.ts'
 import type { PianoStaff } from './staff.ts'
 import {
   compareFractions,
@@ -120,6 +128,8 @@ export function buildMeasureContent(options: {
   writtenDurations?: readonly WrittenDurationReading[]
   /** Ornamental notes attached to a principal attack. */
   graceNotes?: readonly GraceNoteReading[]
+  /** MIDI events that stay in the performance and are not written notes. */
+  omittedNotes?: readonly OmittedNoteReading[]
   /**
    * Tick used to choose the measure and the rhythmic column.
    * Absent means the original MIDI onset. The MIDI event itself is not rewritten.
@@ -135,8 +145,10 @@ export function buildMeasureContent(options: {
   const readings = options.sustainedNotes ?? []
   const writtenDurations = options.writtenDurations ?? []
   const graceReadings = options.graceNotes ?? []
+  const omitted = options.omittedNotes ?? []
 
   for (const note of options.notes) {
+    if (matchOmittedNote(note, omitted)) continue
     const segments = spellMatchingReading(note, readings, options.ticksPerWrittenQuarter)
     if (segments !== undefined) {
       placeSpelledNote(note, segments, options, groups, provisional, unresolved, ties, spanTicks)
