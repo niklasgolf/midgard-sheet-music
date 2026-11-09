@@ -107,7 +107,7 @@ if (page.includes('accidental') || page.includes('♯') || page.includes('♭'))
 if (!page.includes('grandStaffFrame()')) fail('The classical staff frame was removed.')
 
 const view = readFileSync('src/notation/engraving-view.ts', 'utf8')
-if (!view.includes('measureSvg({ label, content, timeSignature, system })')) {
+if (!view.includes('measureSvg({ label, content, timeSignature, system, maxWidth })')) {
   fail('Each measure is not drawn by the shared measure SVG.')
 }
 if (!view.includes("system === 'midgard' ? 'midGard Sheet Music'")) {

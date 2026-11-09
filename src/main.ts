@@ -6,6 +6,7 @@ import { mountMidgardStaff } from './notation/midgard-staff-svg.ts'
 import type { SongLoad } from './song/import-chopin-song.ts'
 import { IndexedDBSongRepository } from './song/indexeddb-song-repository.ts'
 import { mountSheetDisplay } from './song/display-view.ts'
+import { installEtudeFoundation } from './song/install-etude.ts'
 import { installSongCFoundation } from './song/install-song-c.ts'
 import { installSongBInterpretations } from './song/install-sustained-reading.ts'
 import { ensureProjectSongs, pdfUrlForSong } from './song/project-songs.ts'
@@ -122,10 +123,13 @@ ensureProjectSongs(songs)
   .then(async (libraryLoad) => {
     const correction = await installSongBInterpretations(songs)
     const songC = await installSongCFoundation(songs)
+    const etude = await installEtudeFoundation(songs)
     importedIds = new Set(libraryLoad.importedIds)
     librarySongs = await songs.listSongs()
     showLibrary()
-    const correctionMessage = [installMessage(correction), installMessage(songC)].filter((message) => message !== '').join(' ')
+    const correctionMessage = [installMessage(correction), installMessage(songC), installMessage(etude)]
+      .filter((message) => message !== '')
+      .join(' ')
     if (correctionMessage !== '') {
       settingsStatus.textContent = correctionMessage
       settingsStatus.className = 'settings__status settings__status--error'

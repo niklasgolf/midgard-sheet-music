@@ -74,6 +74,8 @@ export function measureSvg(options: {
   content: MeasureContent
   timeSignature?: TimeSignature
   system?: NotationSystem
+  /** Largest SVG width that still sits inside the measure's grid cell. */
+  maxWidth?: number
 }): SVGSVGElement {
   const system = options.system ?? 'classical'
   const placed = options.content.columns.map((column) => placeColumn(column, system))
@@ -100,14 +102,16 @@ export function measureSvg(options: {
   const opensFromLeft = options.content.ties.some(
     (tie) => tie.role === 'incoming' || tie.role === 'continuation',
   )
+  const rightPad = NOTE_AREA_RIGHT + STAFF_INSET
   const spacing = spaceColumns({
     onsets: [...placed, ...provisional].map((column) => column.onset),
     measureQuarters: options.content.measureQuarters,
     originX: NOTE_AREA_LEFT + (opensFromLeft ? TIE_APPROACH : 0),
     extents,
     noteheadWidth: NOTEHEAD_WIDTH,
+    maxContentRight: options.maxWidth === undefined ? undefined : options.maxWidth - rightPad,
   })
-  const width = spacing.contentRight + NOTE_AREA_RIGHT + STAFF_INSET
+  const width = spacing.contentRight + rightPad
   const frame = grandStaffFrame()
   const height = system === 'midgard' ? MIDGARD_STAFF_HEIGHT : frame.height
   const staffLeft = STAFF_INSET
@@ -120,6 +124,7 @@ export function measureSvg(options: {
   svg.setAttribute('height', String(height))
   svg.setAttribute('role', 'img')
   svg.setAttribute('data-notation', system)
+  svg.setAttribute('data-fits', spacing.fits ? 'true' : 'false')
   const unresolved = options.content.unresolved.length
   const incomplete = unresolved === 0 ? '' : `, ${unresolved} unresolved`
   svg.setAttribute('aria-label', `${options.label}, ${notes} notes${incomplete}`)

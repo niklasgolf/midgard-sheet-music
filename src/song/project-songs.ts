@@ -1,9 +1,11 @@
 import midiAUrl from '../../midi-files/chopin-prelude-op-28-no-7-in-a-major.mid?url'
 import midiBUrl from '../../midi-files/chopin-prelude-op-28-no-7-in-a-major-b.mid?url'
 import midiCUrl from '../../midi-files/eine-kleine-nachtmusik-intermediate.mid?url'
+import midiEtudeUrl from '../../midi-files/etude-op10-no3-e-major-tristesse-chopin.mid?url'
 import pdfAUrl from '../../pdf-files/chopin-prelude-op-28-no-7-in-a-major.pdf?url'
 import pdfBUrl from '../../pdf-files/chopin-prelude-op-28-no-7-in-a-major-b.pdf?url'
 import pdfCUrl from '../../pdf-files/eine-kleine-nachtmusik-intermediate.pdf?url'
+import pdfEtudeUrl from '../../pdf-files/etude-op10-no3-e-major-tristesse-chopin.pdf?url'
 import { parseMidi, type MidiFile } from '../midi/parse-midi.ts'
 import type { SongRepository } from './song-repository.ts'
 import { SONG_SCHEMA_VERSION, type Song } from './song.ts'
@@ -14,6 +16,8 @@ export const CHOPIN_SONG_ID = 'chopin-prelude-op-28-no-7'
 export const CHOPIN_SONG_B_ID = 'chopin-prelude-op28-no7-b'
 
 export const EINE_KLEINE_SONG_ID = 'eine-kleine-nachtmusik-intermediate'
+
+export const CHOPIN_ETUDE_SONG_ID = 'chopin-etude-op10-no3-tristesse'
 
 type ProjectSongFile = {
   id: string
@@ -56,6 +60,15 @@ const PROJECT_SONGS: readonly ProjectSongFile[] = [
     pdfFilename: 'eine-kleine-nachtmusik-intermediate.pdf',
     midiUrl: midiCUrl,
     pdfUrl: pdfCUrl,
+  },
+  {
+    id: CHOPIN_ETUDE_SONG_ID,
+    title: 'Étude Op. 10 No. 3 in E major (Tristesse)',
+    composer: 'Frédéric Chopin',
+    sourceFilename: 'etude-op10-no3-e-major-tristesse-chopin.mid',
+    pdfFilename: 'etude-op10-no3-e-major-tristesse-chopin.pdf',
+    midiUrl: midiEtudeUrl,
+    pdfUrl: pdfEtudeUrl,
   },
 ]
 

@@ -190,17 +190,20 @@ This is dependency inversion. Interpretation and SVG engraving receive a Song, o
 
 Convex is the planned database for the phase after this prototype can render a complete composition. It is not installed, and there is no Convex client or placeholder class. When that phase starts, a Convex repository can implement the same interface. The musical engine should not need to be rewritten to change databases.
 
-On startup, `ensureProjectSongs` looks up three project ids through the repository:
+On startup, `ensureProjectSongs` looks up four project ids through the repository:
 
 | Song | Id | MIDI file | PDF file |
 |---|---|---|---|
 | Song A | `chopin-prelude-op-28-no-7` | `chopin-prelude-op-28-no-7-in-a-major.mid` | `chopin-prelude-op-28-no-7-in-a-major.pdf` |
 | Song B | `chopin-prelude-op28-no7-b` | `chopin-prelude-op-28-no-7-in-a-major-b.mid` | `chopin-prelude-op-28-no-7-in-a-major-b.pdf` |
 | Song C | `eine-kleine-nachtmusik-intermediate` | `eine-kleine-nachtmusik-intermediate.mid` | `eine-kleine-nachtmusik-intermediate.pdf` |
+| Étude | `chopin-etude-op10-no3-tristesse` | `etude-op10-no3-e-major-tristesse-chopin.mid` | `etude-op10-no3-e-major-tristesse-chopin.pdf` |
 
-Song A’s id is the one already used by the first import. It is kept. Song B and Song C are different records. If an id is already stored, that record’s MIDI and settings are left alone. If it is missing, the MIDI is parsed once and the Song is inserted with an empty interpretation. The Choose a Song list is then filled from `listSongs()`, not from this table. A later import will appear there without a change to the list.
+Song A’s id is the one already used by the first import. It is kept. Song B, Song C, and the étude are different records. If an id is already stored, that record’s MIDI and settings are left alone. If it is missing, the MIDI is parsed once and the Song is inserted with an empty interpretation. The Choose a Song list is then filled from `listSongs()`, not from this table. A later import will appear there without a change to the list. The list is sorted by composer and title.
 
 After the library is loaded, one install looks at Song B only. It carries the confirmed spellings: the Bar 5 D4, the Bar 11 C♯5 and E5, the Bar 15 and 16 A4 halves, the Bar 15 written sixteenth, and the Bar 15 grace note. Each spelling is added only when Part B still contains that exact MIDI event and Part C does not already spell it. A grace note is also checked against the principal note it names. Missing spellings are appended in one save. A second startup finds them and does not write. A Bar 5 reading stored without tie flags still means both junctions are tied, so the install does not rewrite it. If Part C already spells the same event with a different written value, different tie flags, or a different grace-note reading, that stored spelling stays and the install says so. Song A is not part of the install. Parts A and B, and every other Part C field, stay as they were. This is not a schema migration. The database version stays 1.
+
+A second install looks at the étude only, after that empty import. When the fields are missing it stores 2/4, E major, an eighth-note pickup, 480 ticks per written quarter, and a display choice of 5 complete measures with 3 per row. The pickup is Bar 0, so those five complete measures are Bars 1–5 and the page shows Bars 0–5. A field that is already stored is left as it is, including a different meter, a different pickup, or a different display count. The second startup finds the reading and does not write. It does not add sustained-note spellings, written durations, or grace notes. The 1,926 MIDI notes stay in Part B.
 
 The right panel has three screens. All keep the title **The midGard Sheet Music Editor**, centered, with the subtitle centered on the next line. Choose a Song lists every record from `listSongs()`. Nothing is selected until the user clicks. Edit Mode replaces that subtitle with the Song’s title and shows Change song, aligned to the right on the next line. The list hides. Beneath that header, Edit Mode places the controls in two rows of three: Measures per row, Measures to display, and Time signature, then Pickup, Ticks per written quarter, and Pickup duration. Key signature and Sheet system share the next row in two equal columns. Sheet system offers Classical and midGard. Classical starts selected each time a Song is opened. Choosing one redraws the open measures immediately. The choice is not saved, and it does not reload the Song or the PDF. Save Changes sits on the following line, compact and aligned to the right. There is no Musical settings heading and no divider between those rows. Edit Names is the last control in that panel, after Song Storage — IndexedDB. A window narrower than 720 pixels stacks each control on its own line. The right panel stays 800 pixels wide. The PDF and the measure SVGs load from `getSong`. Change song asks `listSongs()` again, clears the open Song, and does not call `saveSong`. Edit Names is a subpage of the right panel for the same Song. The three columns stay in place. The PDF and the measure SVGs stay mounted and visible. Only the right panel changes: it shows the title and composer, and it hides the display controls, the musical settings, and Song Storage. Return restores those controls for the same Song and does not reload the PDF or redraw the score. If the name fields differ from the saved Song, Return asks before leaving and does not save. A refresh still opens Choose a Song.
 
@@ -212,7 +215,7 @@ There is still no general file-picker import and no portable Song file.
 
 ### How a Song moves
 
-**Import.** The parser reads a Standard MIDI file and returns structured information. It does not invent barlines, ties, or spelling. Today this runs for the three project files, and only when each Song is missing. A general file picker is planned.
+**Import.** The parser reads a Standard MIDI file and returns structured information. It does not invent barlines, ties, or spelling. Today this runs for the four project files, and only when each Song is missing. A general file picker is planned.
 
 **Create.** The application builds one Song. Part A receives the title, composer, source filename, and PDF filename. Part B receives the parsed MIDI. Part C starts empty. The Song is inserted into `songs`. This is implemented for a missing project Song.
 
@@ -489,7 +492,7 @@ display: grid;
 grid-template-columns: repeat(3, minmax(0, 1fr));
 ```
 
-Each measure div occupies one cell and is centered in that cell. The SVG inside keeps its natural width and height. A narrow measure is not stretched. Grid gaps and padding are page spacing. They are not musical spacing.
+Each measure div occupies one cell and is centered in that cell. The SVG keeps its natural height. Its width is the comfortable rhythmic spacing when that fits the cell, and a shorter width when it does not. A narrow measure, such as a pickup, is not stretched. Grid gaps and padding are page spacing. They are not musical spacing. The clearance between facing noteheads is. When a bar is wider than its cell, only the extra room that came from the written durations is reduced, in proportion to those durations. A bar that would still overlap at that clearance keeps the clearance, stays wider than the cell, and says so under the measure.
 
 The song list is ordinary HTML. Its layout does not interpret the music. In Edit Mode the order is the two control rows, then Key signature beside Sheet system, Save Changes, Song Storage — IndexedDB, then Edit Names. Those rows use CSS Grid. Choose a Song hides those sections, clears the PDF and the classical score, and shows The midGard System in the center column. Edit Names replaces only the contents of the right panel with the title and composer. The three columns stay in place, and returning does not reload the PDF or redraw the score.
 
@@ -831,13 +834,53 @@ From that origin through the last note onset is 47 complete measures. A Song wit
 
 Both hands live on the one MIDI track. Part C records `staffSplitPitch: 60`. Pitches 60 and above are read on the treble staff, and lower pitches on the bass. This is a provisional split for engraving. It is not a claim that every note sits on the printed staff, and a later per-note staff choice can replace it. Songs A and B have two note-bearing tracks, so their staff assignment stays the track order even if a split pitch is also present.
 
-Edit Mode, in the right-hand panel, chooses how many complete measures to draw: 1, 2, 3, 4, 5, 6, a custom positive whole number, or all measures. It also chooses 2 or 3 measures per row. An invalid custom number is reported and leaves the current score in place. Both choices are stored on the Song’s `display` object, beside Part C, and each Song keeps its own. Changing one leaves the other in place. A Song with no count still draws 16 complete measures, plus Bar 0 when there is a pickup. A Song with no row choice uses 3 per row. Song C’s first saved choice is 6 measures, with 2 per row. A number larger than the piece draws through the last measure that contains a note and says so. The original 872 notes stay in Part B. Later choices could choose the number of measures per row automatically, fit the row to the available width, or match the line breaks of the original PDF. Those modes are not implemented. The row choice stays `{ kind: 'fixed', count: 2 | 3 }` so one of those kinds can be added later.
+Edit Mode, in the right-hand panel, chooses how many complete measures to draw: 1, 2, 3, 4, 5, 6, a custom positive whole number, or all measures. It also chooses 2 or 3 measures per row. An invalid custom number is reported and leaves the current score in place. Both choices are stored on the Song’s `display` object, beside Part C, and each Song keeps its own. Changing one leaves the other in place. A Song with no count still draws 16 complete measures, plus Bar 0 when there is a pickup. A Song with no row choice uses 3 per row. Song C’s first saved choice is 6 measures, with 2 per row. The étude’s first saved choice is 5 complete measures, with 3 per row, so the pickup and those five bars are Bars 0–5. A number larger than the piece draws through the last measure that contains a note and says so. The original 872 notes stay in Part B. Later choices could choose the number of measures per row automatically, fit the row to the available width, or match the line breaks of the original PDF. Those modes are not implemented. The row choice stays `{ kind: 'fixed', count: 2 | 3 }` so one of those kinds can be added later.
 
 The theme’s downbeats sit on a 480-tick quarter counted from tick 2734. The attacks between those downbeats are a performance. They land a few ticks early or late of a sixteenth grid, and one chord at tick 4638 falls 16 ticks before the Bar 2 barline even though it is that bar’s downbeat. Songs A and B do not need this correction: their performed attacks already match the written grid closely enough for the two-tick onset rule. Song C stores `writtenOnsetAlignment` with four subdivisions of the quarter and a maximum deviation of 30 ticks. That is a sixteenth grid. An attack within 30 ticks of a grid position is drawn at the grid position. An attack farther away keeps its MIDI onset and stays unresolved. The stored timestamps do not move, and the same tolerance is not applied to Songs A and B.
 
 Measure membership uses that written onset before the note is given a column. The G chord whose keys went down at tick 4638 is drawn only in Bar 2. D5 at tick 4392 and D3 at tick 4423 share the written onset 4414, so they share one rhythmic column, and they remain two notes on two staffs.
 
 The sounding durations stay a separate fact. They are often near an eighth or a quarter and are rarely an exact catalog value. The duration tolerance stays two ticks, so those near misses stay unresolved. Six notes have an explicit written duration because a nearest catalog value would be the wrong one. The G chord at tick 3686 is a printed eighth, including G4, whose key is held for 768 ticks. The B chord at tick 5376 is a printed eighth, including B4 and B5, whose keys are held for 30 ticks. Their sounding lengths are unchanged. The opening quarters and the other eighths in Bars 1 and 2 are still unresolved, because their performed lengths were not given a written reading. Rests, flags, and beams of more than two notes are not drawn yet.
+
+### Étude Op. 10 No. 3
+
+The fourth Song is Frédéric Chopin’s *Étude Op. 10 No. 3 in E major (Tristesse)*. The MIDI file is imported whole. The first picture draws only the opening, so the generated notation can be compared with the PDF before the rest of the piece is shown.
+
+| Fact | Value |
+|---|---|
+| Id | `chopin-etude-op10-no3-tristesse` |
+| Title | Étude Op. 10 No. 3 in E major (Tristesse) |
+| MIDI file | `midi-files/etude-op10-no3-e-major-tristesse-chopin.mid` |
+| PDF file | `pdf-files/etude-op10-no3-e-major-tristesse-chopin.pdf` |
+| MIDI format | 1 |
+| Tracks | 2, both named `Piano` followed by a NUL byte. Track 1 has 1,175 notes and is read as the treble staff. Track 2 has 751 notes and is read as the bass staff. |
+| Paired notes | 1,926, every one on channel 1 |
+| PPQ | 480 |
+| Tempo | 85 events. The first, at tick 0, is 2,399,998 microseconds per MIDI quarter, about 25 BPM. Tick 480 is 2,000,000 microseconds, which is 30 BPM. The later events are a performed rubato. Part B keeps every one. Part C does not store a tempo map. |
+| Time-signature events | 1/8 at tick 0, then 2/4 at tick 240 |
+| Key-signature events | Two copies of 4 sharps, major, both at tick 0, one on each track. No later key-signature event. |
+| Pitch range | A1 (MIDI 33) through E7 (MIDI 100) |
+| First note onset | Tick 0 |
+| Last note release | Tick 74111 |
+
+The PDF’s first page is titled “Etude Op.10 No.3” and “in E Major”. Both staves show four sharps and 2/4. The treble begins with an eighth-note pickup, and the bass begins with an eighth rest, under the words “Lento, ma non troppo”. The page text could not be extracted, so this reading comes from that first page as a picture. Later pages were not compared note by note.
+
+Part C reads those facts as 2/4, E major, an eighth-note pickup, and 480 ticks per written quarter. The file’s 1/8 event is the pickup, not a second written meter. 480 is the file’s PPQ, and it is also the written quarter: the pickup lasts 240 ticks, and the attacks in Bars 0–5 fall on a 120-tick sixteenth grid. PPQ was not copied merely because it was present. `writtenStartTick` stays absent, which means the written music begins at tick 0. There is no onset alignment. Thirty-one notes later in the file, the first at tick 6733, leave that sixteenth grid. They stay unresolved until a reading is chosen. Songs A, B, and C are not given this meter.
+
+The opening spans, at 480 ticks per written quarter, are:
+
+| Bar | Start tick | End tick | Role |
+|---|---:|---:|---|
+| 0 | 0 | 240 | Eighth-note pickup |
+| 1 | 240 | 1200 | First complete bar |
+| 2 | 1200 | 2160 | |
+| 3 | 2160 | 3120 | |
+| 4 | 3120 | 4080 | |
+| 5 | 4080 | 5040 | |
+
+The saved display choice is 5 complete measures and 3 per row. The pickup is extra, so the page shows Bars 0–5 in two rows of three. Choosing 6 complete measures also draws Bar 6. The rest of the 1,926 notes remain in Part B, and a larger display count draws them with the same settings.
+
+The six opening bars are fitted to the three columns. Their comfortable spacing was wider than the cell, so the rightmost noteheads were cut off by the cell. The fitted spacing keeps those noteheads inside the measure. The opening is not yet a clean engraving. Bar 0’s B3 lasts 239 ticks and is read as an eighth. Many other attacks last 119 ticks and are read as eighths. Notes of 113 ticks are seven ticks short of an eighth, so they stay unresolved. Each bass downbeat in these bars also contains a zero-duration duplicate of the sounding bass note. The file has 48 such notes. A zero duration has no written value. The longer accompaniment notes, often 227 or 455 ticks, are not catalog durations either. No sustained-note spelling, written-duration override, or grace note has been stored. Classical is selected when the Song is opened. midGard uses the same six bars and the same Part B and Part C.
 
 ## 15. Beams
 
@@ -867,7 +910,7 @@ On Choose a Song, the center column introduces the notation under the heading **
 
 Under the heading **Traditional Sheet Music — SVG Experiment**, the page draws the measures chosen for the selected Song. The choice needs a time signature, a pickup answer, and ticks per written quarter. A pickup answer may be no. The written start tick, when saved, places Bar 1 or the pickup. If a required setting is missing, the section says so and draws no measures. It does not silently use PPQ.
 
-Each measure is one div and one SVG. The grid places the song’s chosen number of measures on each row, 3 when that choice has not been saved, and 2 for Song C’s first saved choice. The SVG keeps the size the engraving calculated. Changing the row does not change the staff, the note spacing, or the viewBox. A measure wider than its cell scrolls inside that cell, so it does not cover the next measure.
+Each measure is one div and one SVG. The grid places the song’s chosen number of measures on each row, 3 when that choice has not been saved, and 2 for Song C’s first saved choice. The SVG height is the height the engraving calculated. The width starts from the same rhythmic spacing: a fixed clearance between facing noteheads, then 48 pixels for each written quarter between them. Before the notes are placed, the renderer measures the grid cell and subtracts the measure’s border and padding. If the comfortable width fits that cell, it is used unchanged. If it does not, the quarter-pixels shrink until the noteheads, dots, and the right margin fit. A longer written gap gives up more room than a shorter one. The clearance itself does not shrink, and a short measure is not stretched to fill the cell. Changing the row changes that available width, not the staff or the viewBox height. A measure that cannot fit even at the clearance stays at that minimum, scrolls inside its cell, and says that it was not overlapped. Classical and midGard use this same horizontal layout.
 
 For the selected Song, a recognized note is drawn with its notehead, its ledger lines, its stem when the duration has one, and its dot when the duration has one. Eighths and sixteenths that share a beat also receive a beam, inside that measure’s SVG. An unresolved note is drawn as a crimson notehead at its real onset. The warning under the measure lists the track, pitch, onset, duration, and the reason. The original MIDI is not changed.
 
@@ -888,7 +931,7 @@ A tie is drawn when Part C spells the MIDI sound as written notes. A grace note 
 
 ## 17. Where the engraving stands
 
-The first engraving target was a professionally readable Bar 0 and Bar 1. A Song with no display choice still draws sixteen complete measures, plus a pickup when it has one. Sheet Music Display can ask for fewer, or for every measure that contains a note. That choice does not delete or shorten a Song. Song A’s 176 notes, Song B’s 168 notes, and Song C’s 872 notes remain in IndexedDB.
+The first engraving target was a professionally readable Bar 0 and Bar 1. A Song with no display choice still draws sixteen complete measures, plus a pickup when it has one. Sheet Music Display can ask for fewer, or for every measure that contains a note. That choice does not delete or shorten a Song. Song A’s 176 notes, Song B’s 168 notes, Song C’s 872 notes, and the étude’s 1,926 notes remain in IndexedDB.
 
 The engine stays general. Another Song, or a later measure, must be drawable without a new piece of Chopin-specific drawing code. The Bar 5 reading is a musical conclusion stored on Song B. The renderer does not contain that Song’s id.
 
@@ -1011,7 +1054,7 @@ Engraving and layout:
 
 Storage and the life of a Song:
 
-- How should Song IDs be generated for a future import, beyond the three project ids?
+- How should Song IDs be generated for a future import, beyond the four project ids?
 - How should the selected Song be remembered after a refresh?
 - How should the Song schema be versioned when a future change cannot be expressed as an optional field? Adding `sustainedNotes` did not require a new database version. A change that rewrites existing records still needs a plan.
 - How do we preserve imported events that the parser does not yet fully interpret, so a later parser can still see them?

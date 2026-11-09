@@ -45,9 +45,12 @@ export function renderEngraving(container: HTMLElement, song: Song, system: Nota
     return
   }
 
+  const columns = measuresPerRowCount(song)
   const grid = document.createElement('div')
   grid.className = 'engraving__grid'
-  grid.dataset.columns = String(measuresPerRowCount(song))
+  grid.dataset.columns = String(columns)
+  container.replaceChildren(title, grid)
+  const maxWidth = availableSvgWidth(grid, columns)
   for (const measure of plan.measures) {
     grid.append(
       measureBlock(
@@ -60,10 +63,35 @@ export function renderEngraving(container: HTMLElement, song: Song, system: Nota
         staves.staffByTrack,
         staves.staffForNote,
         system,
+        maxWidth,
       ),
     )
   }
-  container.replaceChildren(title, grid)
+}
+
+/** SVG width that fits one grid cell, after the measure border and padding. */
+function availableSvgWidth(grid: HTMLElement, columns: number): number | undefined {
+  const gridWidth = grid.clientWidth
+  if (gridWidth <= 0 || columns < 1) return undefined
+  const gap = Number.parseFloat(getComputedStyle(grid).columnGap)
+  const columnGap = Number.isFinite(gap) ? gap : 0
+  const slot = (gridWidth - columnGap * (columns - 1)) / columns
+  const probe = document.createElement('div')
+  probe.className = 'measure'
+  grid.append(probe)
+  const style = getComputedStyle(probe)
+  const chrome =
+    parsedPixels(style.paddingLeft) +
+    parsedPixels(style.paddingRight) +
+    parsedPixels(style.borderLeftWidth) +
+    parsedPixels(style.borderRightWidth)
+  probe.remove()
+  return Math.floor(slot - chrome)
+}
+
+function parsedPixels(value: string): number {
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) ? parsed : 0
 }
 
 function measureBlock(
@@ -76,6 +104,7 @@ function measureBlock(
   staffByTrack: ReadonlyMap<number, PianoStaff>,
   staffForNote: (note: MidiNote) => PianoStaff | undefined,
   system: NotationSystem,
+  maxWidth: number | undefined,
 ): HTMLElement {
   const item = document.createElement('div')
   item.className = 'engraving__item'
@@ -102,10 +131,20 @@ function measureBlock(
   })
   const frame = document.createElement('div')
   frame.className = 'measure'
-  frame.append(measureSvg({ label, content, timeSignature, system }))
+  const svg = measureSvg({ label, content, timeSignature, system, maxWidth })
+  frame.append(svg)
   item.append(name, ticks, frame)
+  if (svg.getAttribute('data-fits') === 'false') item.append(densityWarning())
   if (content.unresolved.length > 0) item.append(unresolvedWarning(content.unresolved))
   return item
+}
+
+function densityWarning(): HTMLElement {
+  const warning = document.createElement('p')
+  warning.className = 'engraving__warning'
+  warning.textContent =
+    'This bar is too dense for the column. The notes kept their minimum spacing and were not overlapped.'
+  return warning
 }
 
 function unresolvedWarning(notes: readonly { midi: number; track: number; startTick: number; durationTicks: number; reason: string }[]): HTMLElement {

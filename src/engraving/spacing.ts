@@ -15,6 +15,8 @@ import type { NoteheadExtent } from './chord-offset.ts'
  * column to the next keeps the facing noteheads apart, then adds room for the
  * written time between them. A notehead shifted sideways, or an augmentation
  * dot beyond it, widens that minimum through the column's right extent.
+ * When a caller gives a maximum width, only that extra written-time room
+ * shrinks. The clearance between facing noteheads does not.
  * This is not a MIDI timeline and not VexFlow's softmax spacing.
  */
 
@@ -38,6 +40,11 @@ export type MeasureSpacing = {
   columns: SpacedColumn[]
   /** Right edge of the time that belongs to the last onset. */
   contentRight: number
+  /**
+   * False when even the collision spacing is wider than maxContentRight.
+   * The columns keep that minimum. They are not pulled on top of each other.
+   */
+  fits: boolean
 }
 
 export function spaceColumns(options: {
@@ -46,39 +53,61 @@ export function spaceColumns(options: {
   originX: number
   extents?: ReadonlyMap<string, NoteheadExtent>
   noteheadWidth?: number
+  /**
+   * Largest allowed contentRight. Absent means the comfortable quarter spacing.
+   * A value that the comfortable layout already meets is left unchanged.
+   * Between that layout and the collision minimum, extra room is given out
+   * in proportion to the written time. The clearance between noteheads stays.
+   */
+  maxContentRight?: number
 }): MeasureSpacing {
   const noteheadWidth = options.noteheadWidth ?? DEFAULT_NOTEHEAD_WIDTH
   const onsets = uniqueOnsets(options.onsets)
-  if (onsets.length === 0) {
-    return {
-      columns: [],
-      contentRight: options.originX + trailingSpace(options.measureQuarters),
+  const ideal = placeColumns(
+    onsets,
+    options.measureQuarters,
+    options.originX,
+    options.extents,
+    noteheadWidth,
+    PIXELS_PER_QUARTER,
+    MIN_TRAILING_SPACE,
+  )
+  const limit = options.maxContentRight
+  if (limit === undefined || ideal.contentRight <= limit) return { ...ideal, fits: true }
+
+  const minimum = placeColumns(
+    onsets,
+    options.measureQuarters,
+    options.originX,
+    options.extents,
+    noteheadWidth,
+    0,
+    0,
+  )
+  if (minimum.contentRight > limit) return { ...minimum, fits: false }
+
+  let low = 0
+  let high = PIXELS_PER_QUARTER
+  let best = minimum
+  for (let step = 0; step < 24; step += 1) {
+    const scale = (low + high) / 2
+    const placed = placeColumns(
+      onsets,
+      options.measureQuarters,
+      options.originX,
+      options.extents,
+      noteheadWidth,
+      scale,
+      0,
+    )
+    if (placed.contentRight <= limit) {
+      best = placed
+      low = scale
+    } else {
+      high = scale
     }
   }
-
-  const first = onsets[0]
-  const firstExtent = extentFor(options.extents, first, noteheadWidth)
-  const leftOverflow = Math.max(0, firstExtent.left - noteheadWidth / 2)
-  const columns: SpacedColumn[] = []
-  let x = options.originX + leftOverflow
-  for (let index = 0; index < onsets.length; index += 1) {
-    const onset = onsets[index]
-    if (onset === undefined) continue
-    columns.push({ onset, x })
-    const next = onsets[index + 1]
-    if (next !== undefined) x += columnGap(onset, next, options.extents, noteheadWidth)
-  }
-
-  const last = columns[columns.length - 1]
-  if (last === undefined) {
-    return { columns, contentRight: options.originX }
-  }
-  const remaining = subtractFractions(options.measureQuarters, last.onset)
-  const lastExtent = extentFor(options.extents, last.onset, noteheadWidth)
-  return {
-    columns,
-    contentRight: last.x + Math.max(trailingSpace(remaining), lastExtent.right),
-  }
+  return { ...best, fits: true }
 }
 
 export function columnX(spacing: MeasureSpacing, onset: Fraction): number {
@@ -89,11 +118,51 @@ export function columnX(spacing: MeasureSpacing, onset: Fraction): number {
   return column.x
 }
 
+function placeColumns(
+  onsets: readonly Fraction[],
+  measureQuarters: Fraction,
+  originX: number,
+  extents: ReadonlyMap<string, NoteheadExtent> | undefined,
+  noteheadWidth: number,
+  scale: number,
+  trailingFloor: number,
+): { columns: SpacedColumn[]; contentRight: number } {
+  if (onsets.length === 0) {
+    return {
+      columns: [],
+      contentRight: originX + Math.max(trailingFloor, fractionToNumber(measureQuarters) * scale),
+    }
+  }
+
+  const first = onsets[0]
+  const firstExtent = extentFor(extents, first, noteheadWidth)
+  const leftOverflow = Math.max(0, firstExtent.left - noteheadWidth / 2)
+  const columns: SpacedColumn[] = []
+  let x = originX + leftOverflow
+  for (let index = 0; index < onsets.length; index += 1) {
+    const onset = onsets[index]
+    if (onset === undefined) continue
+    columns.push({ onset, x })
+    const next = onsets[index + 1]
+    if (next !== undefined) x += columnGap(onset, next, extents, noteheadWidth, scale)
+  }
+
+  const last = columns[columns.length - 1]
+  if (last === undefined) return { columns, contentRight: originX }
+  const remaining = fractionToNumber(subtractFractions(measureQuarters, last.onset))
+  const lastExtent = extentFor(extents, last.onset, noteheadWidth)
+  return {
+    columns,
+    contentRight: last.x + Math.max(trailingFloor, remaining * scale, lastExtent.right),
+  }
+}
+
 function columnGap(
   onset: Fraction,
   next: Fraction,
   extents: ReadonlyMap<string, NoteheadExtent> | undefined,
   noteheadWidth: number,
+  scale: number,
 ): number {
   const delta = fractionToNumber(subtractFractions(next, onset))
   if (delta <= 0) {
@@ -101,7 +170,7 @@ function columnGap(
   }
   const previous = extentFor(extents, onset, noteheadWidth)
   const following = extentFor(extents, next, noteheadWidth)
-  return previous.right + following.left + NOTEHEAD_EDGE_GAP + delta * PIXELS_PER_QUARTER
+  return previous.right + following.left + NOTEHEAD_EDGE_GAP + delta * scale
 }
 
 function extentFor(
@@ -111,11 +180,6 @@ function extentFor(
 ): NoteheadExtent {
   if (onset === undefined) return { left: noteheadWidth / 2, right: noteheadWidth / 2 }
   return extents?.get(fractionKey(onset)) ?? { left: noteheadWidth / 2, right: noteheadWidth / 2 }
-}
-
-function trailingSpace(remaining: Fraction): number {
-  const quarters = Math.max(0, fractionToNumber(remaining))
-  return Math.max(MIN_TRAILING_SPACE, quarters * PIXELS_PER_QUARTER)
 }
 
 function uniqueOnsets(onsets: readonly Fraction[]): Fraction[] {
