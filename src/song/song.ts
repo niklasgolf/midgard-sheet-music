@@ -149,6 +149,12 @@ export type MeasuresPerRow = { kind: 'fixed'; count: 2 | 3 }
 export type SongDisplay = {
   measures?: MeasureDisplay
   measuresPerRow?: MeasuresPerRow
+  /**
+   * Pixel width of every midGard measure in this Song.
+   * Absent means the default. Classical spacing does not read it.
+   * This is display state. It is not Part C and it does not change the MIDI.
+   */
+  midgardMeasureWidth?: number
 }
 
 /** Complete measures drawn when a Song has no saved display choice. A pickup is extra. */
@@ -156,6 +162,21 @@ export const DEFAULT_COMPLETE_MEASURES = 16
 
 /** Measure columns used when a Song has no saved row choice. */
 export const DEFAULT_MEASURES_PER_ROW = 3
+
+/** Pixel width of every midGard measure when the Song has not stored one. */
+export const MIDGARD_MEASURE_WIDTH_DEFAULT = 400
+
+export const MIDGARD_MEASURE_WIDTH_MIN = 200
+
+export const MIDGARD_MEASURE_WIDTH_MAX = 800
+
+export const MIDGARD_MEASURE_WIDTH_STEP = 20
+
+/** The stored midGard width, or 400 when the Song has not stored one. */
+export function midgardMeasureWidth(song: Song): number {
+  const width = song.display?.midgardMeasureWidth
+  return width === undefined ? MIDGARD_MEASURE_WIDTH_DEFAULT : width
+}
 
 export function completeMeasureRequest(song: Song): number | 'all' {
   const measures = song.display?.measures
@@ -177,7 +198,10 @@ export type Song = {
   /** Complete result of the MIDI parser, preserved as imported. */
   originalMidi: MidiFile
   musicalInterpretation: MusicalInterpretation
-  /** How many measures to draw, and how many sit on each row. Absent until a display choice is saved. */
+  /**
+   * How many measures to draw, how many sit on each row, and the midGard measure width.
+   * Absent until a display choice is saved.
+   */
   display?: SongDisplay
 }
 
@@ -289,7 +313,18 @@ function isDisplay(value: unknown): value is SongDisplay {
   const display = value as Partial<SongDisplay>
   if (display.measures !== undefined && !isMeasureDisplay(display.measures)) return false
   if (display.measuresPerRow !== undefined && !isMeasuresPerRow(display.measuresPerRow)) return false
+  if (display.midgardMeasureWidth !== undefined && !isMidgardMeasureWidth(display.midgardMeasureWidth)) return false
   return true
+}
+
+function isMidgardMeasureWidth(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= MIDGARD_MEASURE_WIDTH_MIN &&
+    value <= MIDGARD_MEASURE_WIDTH_MAX &&
+    value % MIDGARD_MEASURE_WIDTH_STEP === 0
+  )
 }
 
 function isMeasureDisplay(value: unknown): value is MeasureDisplay {

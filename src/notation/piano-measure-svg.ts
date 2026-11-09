@@ -11,7 +11,14 @@ import {
   staffTopY,
   TREBLE_BOTTOM_DIATONIC,
 } from '../engraving/geometry.ts'
-import { MIDGARD_STAFF_HEIGHT, midgardLedgerYs, midgardNoteY } from '../engraving/midgard-geometry.ts'
+import {
+  MIDGARD_MEASURE_LINE,
+  MIDGARD_MARGIN_FILL,
+  MIDGARD_STAFF_HEIGHT,
+  midgardLedgerYs,
+  midgardNoteY,
+} from '../engraving/midgard-geometry.ts'
+import { trueTimeTimeline, trueTimeX, type TrueTimeTimeline } from '../engraving/true-time.ts'
 import { defaultStemDirection, noteheadExtent, placeChordNoteheads, type StemDirection } from '../engraving/chord-offset.ts'
 import {
   graceCenterX,
@@ -28,7 +35,7 @@ import {
 import { layoutBeam, type BeamShape } from '../engraving/beam.ts'
 import { appendDot, appendStem, durationHasStem, extentWithDots, placeAugmentationDots, stemGeometry, type StemGeometry } from '../engraving/symbols.ts'
 import { beamEventKey, beamGroups } from '../interpretation/beam-group.ts'
-import { fractionKey } from '../interpretation/duration.ts'
+import { fractionKey, fractionToNumber, type Fraction } from '../interpretation/duration.ts'
 import type { TimeSignature } from '../song/song.ts'
 import { columnX, spaceColumns, type MeasureSpacing } from '../engraving/spacing.ts'
 import {
@@ -53,7 +60,7 @@ import type {
 } from '../interpretation/measure-content.ts'
 import { pitchCount } from '../interpretation/measure-content.ts'
 import type { PianoStaff } from '../interpretation/staff.ts'
-import { drawMidgardBarline, drawMidgardMeasureStaff } from './midgard-staff-svg.ts'
+import { drawMidgardMeasureStaff, drawMidgardTimeZero } from './midgard-staff-svg.ts'
 import type { NotationSystem } from './notation-system.ts'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -69,13 +76,24 @@ const UNRESOLVED_INK = '#742D38'
 
 const NOTEHEAD_WIDTH = NOTE_RX * 2
 
+/** Written timeline for one midGard measure. Classical does not read this. */
+export type TrueTimeMeasure = {
+  measureWidth: number
+  ticksPerWrittenQuarter: number
+  fullMeasureTicks: number
+  /** Where this measure's local tick 0 sits on a complete-measure timeline. */
+  timelineOriginTicks: number
+}
+
 export function measureSvg(options: {
   label: string
   content: MeasureContent
   timeSignature?: TimeSignature
   system?: NotationSystem
-  /** Largest SVG width that still sits inside the measure's grid cell. */
+  /** Largest SVG width that still sits inside the measure's grid cell. Classical only. */
   maxWidth?: number
+  /** Written-time coordinates. Used only when the system is midGard. */
+  trueTime?: TrueTimeMeasure
 }): SVGSVGElement {
   const system = options.system ?? 'classical'
   const placed = options.content.columns.map((column) => placeColumn(column, system))
@@ -103,19 +121,27 @@ export function measureSvg(options: {
     (tie) => tie.role === 'incoming' || tie.role === 'continuation',
   )
   const rightPad = NOTE_AREA_RIGHT + STAFF_INSET
-  const spacing = spaceColumns({
-    onsets: [...placed, ...provisional].map((column) => column.onset),
-    measureQuarters: options.content.measureQuarters,
-    originX: NOTE_AREA_LEFT + (opensFromLeft ? TIE_APPROACH : 0),
-    extents,
-    noteheadWidth: NOTEHEAD_WIDTH,
-    maxContentRight: options.maxWidth === undefined ? undefined : options.maxWidth - rightPad,
-  })
-  const width = spacing.contentRight + rightPad
+  const trueTime = system === 'midgard' ? options.trueTime : undefined
+  if (system === 'midgard' && trueTime === undefined) {
+    throw new Error('A midGard measure needs a true-time timeline.')
+  }
+  const timeline = trueTime === undefined ? undefined : trueTimeTimeline(trueTime.measureWidth, trueTime.fullMeasureTicks)
+  const spacing =
+    timeline === undefined || trueTime === undefined
+      ? spaceColumns({
+          onsets: [...placed, ...provisional].map((column) => column.onset),
+          measureQuarters: options.content.measureQuarters,
+          originX: NOTE_AREA_LEFT + (opensFromLeft ? TIE_APPROACH : 0),
+          extents,
+          noteheadWidth: NOTEHEAD_WIDTH,
+          maxContentRight: options.maxWidth === undefined ? undefined : options.maxWidth - rightPad,
+        })
+      : spaceTrueTime(placed, provisional, trueTime, timeline)
+  const width = timeline === undefined ? spacing.contentRight + rightPad : timeline.measureWidth
   const frame = grandStaffFrame()
   const height = system === 'midgard' ? MIDGARD_STAFF_HEIGHT : frame.height
-  const staffLeft = STAFF_INSET
-  const staffRight = width - STAFF_INSET
+  const staffLeft = timeline === undefined ? STAFF_INSET : timeline.timelineStartX
+  const staffRight = timeline === undefined ? width - STAFF_INSET : timeline.timelineStartX + timeline.timelineWidth
   const notes = pitchCount(options.content)
 
   const svg = document.createElementNS(SVG_NS, 'svg')
@@ -125,13 +151,26 @@ export function measureSvg(options: {
   svg.setAttribute('role', 'img')
   svg.setAttribute('data-notation', system)
   svg.setAttribute('data-fits', spacing.fits ? 'true' : 'false')
+  if (timeline !== undefined && trueTime !== undefined) {
+    svg.setAttribute('data-spacing', 'true-time')
+    svg.setAttribute('data-measure-width', String(timeline.measureWidth))
+    svg.setAttribute('data-timeline-start', String(timeline.timelineStartX))
+    svg.setAttribute('data-timeline-width', String(timeline.timelineWidth))
+    svg.setAttribute('data-full-measure-ticks', String(timeline.fullMeasureTicks))
+    svg.setAttribute('data-timeline-origin', String(trueTime.timelineOriginTicks))
+  }
   const unresolved = options.content.unresolved.length
   const incomplete = unresolved === 0 ? '' : `, ${unresolved} unresolved`
   svg.setAttribute('aria-label', `${options.label}, ${notes} notes${incomplete}`)
 
-  if (system === 'midgard') {
-    drawMidgardMeasureStaff(svg, staffLeft, staffRight)
-    drawMidgardBarline(svg, staffRight)
+  if (system === 'midgard' && timeline !== undefined && trueTime !== undefined) {
+    drawMidgardMeasureStaff(svg, 0, width, {
+      line: MIDGARD_MEASURE_LINE,
+      margins: { width: timeline.margin, fill: MIDGARD_MARGIN_FILL },
+    })
+    if (trueTime.timelineOriginTicks > 0) {
+      drawMidgardTimeZero(svg, trueTimeX(timeline, trueTime.timelineOriginTicks), trueTime.timelineOriginTicks)
+    }
   } else {
     drawStaff(svg, staffLeft, staffRight, frame.trebleBottomY)
     drawStaff(svg, staffLeft, staffRight, frame.bassBottomY)
@@ -141,24 +180,81 @@ export function measureSvg(options: {
   const ink: InkEvent[] = []
   for (const column of placed) {
     const anchorX = columnX(spacing, column.onset)
+    const timeTick = trueTime === undefined ? undefined : writtenTimelineTick(column.onset, trueTime)
     for (const group of column.events) {
-      ink.push({ placed: group, anchorX })
+      ink.push({ placed: group, anchorX, timeTick })
     }
   }
   const beams = stemNotes(svg, ink, options.timeSignature)
-  for (const item of ink) drawEvent(svg, frame, item.placed, item.anchorX, system)
+  for (const item of ink) drawEvent(svg, frame, item.placed, item.anchorX, system, item.timeTick)
   for (const beam of beams) appendBeam(svg, beam.shape, beam.staff)
   for (const column of provisional) {
     const anchorX = columnX(spacing, column.onset)
+    const timeTick = trueTime === undefined ? undefined : writtenTimelineTick(column.onset, trueTime)
     for (const group of column.events) {
-      drawProvisional(svg, frame, group, anchorX, system)
+      drawProvisional(svg, frame, group, anchorX, system, timeTick)
     }
   }
-  drawTies(svg, options.content.ties, placed, spacing, staffLeft, staffRight, system)
+  const tieLeft = timeline === undefined ? staffLeft : 0
+  const tieRight = timeline === undefined ? staffRight : width
+  drawTies(svg, options.content.ties, placed, spacing, tieLeft, tieRight, system)
   drawGraceNotes(svg, frame, options.content.graceNotes, placed, spacing, system)
 
   fitVerticalFrame(svg, width, height)
   return svg
+}
+
+type TimedHeadColumn = {
+  onset: Fraction
+  events: readonly { heads: readonly { offsetX: number }[] }[]
+}
+
+function writtenTimelineTick(onset: Fraction, spec: TrueTimeMeasure): number {
+  return spec.timelineOriginTicks + fractionToNumber(onset) * spec.ticksPerWrittenQuarter
+}
+
+function spaceTrueTime(
+  placed: readonly TimedHeadColumn[],
+  provisional: readonly TimedHeadColumn[],
+  spec: TrueTimeMeasure,
+  timeline: TrueTimeTimeline,
+): MeasureSpacing {
+  const seen = new Set<string>()
+  const columns: { onset: Fraction; x: number }[] = []
+  const heads: { tick: number; x: number }[] = []
+  for (const column of [...placed, ...provisional]) {
+    const key = fractionKey(column.onset)
+    const tick = writtenTimelineTick(column.onset, spec)
+    const x = trueTimeX(timeline, tick)
+    if (!seen.has(key)) {
+      seen.add(key)
+      columns.push({ onset: column.onset, x })
+    }
+    for (const group of column.events) {
+      for (const head of group.heads) heads.push({ tick, x: x + head.offsetX })
+    }
+  }
+  return {
+    columns,
+    contentRight: timeline.timelineStartX + timeline.timelineWidth,
+    fits: !trueTimeTooNarrow(heads, timeline.measureWidth),
+  }
+}
+
+/** Same-tick chords may share a coordinate. A narrow timeline does not move them. */
+function trueTimeTooNarrow(heads: readonly { tick: number; x: number }[], width: number): boolean {
+  for (const head of heads) {
+    if (head.x - NOTE_RX < -0.01 || head.x + NOTE_RX > width + 0.01) return true
+  }
+  const sorted = [...heads].sort((left, right) => left.x - right.x || left.tick - right.tick)
+  for (let index = 1; index < sorted.length; index += 1) {
+    const previous = sorted[index - 1]
+    const next = sorted[index]
+    if (previous === undefined || next === undefined) continue
+    if (Math.abs(previous.tick - next.tick) < 0.01) continue
+    if (next.x - previous.x < NOTEHEAD_WIDTH - 0.01) return true
+  }
+  return false
 }
 
 /** Staff positions stay put. The frame grows only when a stem or notehead passes the padding. */
@@ -295,17 +391,19 @@ function drawProvisional(
   group: ProvisionalEvent & { heads: PlacedHead[] },
   anchorX: number,
   system: NotationSystem,
+  timeTick?: number,
 ): void {
   const bottomY = group.staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
   drawHeadLedgers(svg, group.heads, anchorX, bottomY, UNRESOLVED_INK, system)
   for (const head of group.heads) {
-    drawNotehead(svg, head.pitch, group.staff, anchorX + head.offsetX, head.y, UNRESOLVED_INK)
+    drawNotehead(svg, head.pitch, group.staff, anchorX + head.offsetX, head.y, UNRESOLVED_INK, timeTick, anchorX)
   }
 }
 
 type InkEvent = {
   placed: PlacedEvent
   anchorX: number
+  timeTick?: number
 }
 
 function stemNotes(
@@ -403,11 +501,12 @@ function drawEvent(
   group: PlacedEvent,
   anchorX: number,
   system: NotationSystem,
+  timeTick?: number,
 ): void {
   const bottomY = group.event.staff === 'bass' ? frame.bassBottomY : frame.trebleBottomY
   drawHeadLedgers(svg, group.heads, anchorX, bottomY, INK, system)
   for (const head of group.heads) {
-    drawNotehead(svg, head.pitch, group.event.staff, anchorX + head.offsetX, head.y, INK)
+    drawNotehead(svg, head.pitch, group.event.staff, anchorX + head.offsetX, head.y, INK, timeTick, anchorX)
   }
   for (const dot of group.dots) {
     appendDot(svg, { x: anchorX + dot.offsetX, y: dot.y }, INK, {
@@ -476,6 +575,7 @@ function drawHeadLedgers(
   color: string,
   system: NotationSystem,
 ): void {
+  const ledgerColor = system === 'midgard' && color === INK ? MIDGARD_MEASURE_LINE : color
   if (system !== 'midgard') {
     for (const head of heads) drawLedgerLines(svg, anchorX + head.offsetX, head.staffStep, bottomY, color)
     return
@@ -485,7 +585,7 @@ function drawHeadLedgers(
     const x = anchorX + head.offsetX
     for (const y of midgardLedgerYs(head.pitch.midi)) spans.push({ y, x1: x - STAFF_SPACE, x2: x + STAFF_SPACE })
   }
-  for (const span of mergeLedgerSpans(spans)) drawLedgerSpan(svg, span.x1, span.x2, span.y, color)
+  for (const span of mergeLedgerSpans(spans)) drawLedgerSpan(svg, span.x1, span.x2, span.y, ledgerColor)
 }
 
 function mergeLedgerSpans(
@@ -547,6 +647,8 @@ function drawNotehead(
   x: number,
   y: number,
   color: string,
+  timeTick?: number,
+  timeX?: number,
 ): void {
   const head = document.createElementNS(SVG_NS, 'ellipse')
   head.setAttribute('cx', String(x))
@@ -557,6 +659,10 @@ function drawNotehead(
   head.setAttribute('data-midi', String(pitch.midi))
   head.setAttribute('data-start-tick', String(pitch.startTick))
   head.setAttribute('data-staff', staff)
+  if (timeTick !== undefined && timeX !== undefined) {
+    head.setAttribute('data-time-tick', String(timeTick))
+    head.setAttribute('data-time-x', String(timeX))
+  }
   if (color === UNRESOLVED_INK) {
     head.setAttribute('data-unresolved', 'true')
     head.setAttribute('data-duration-ticks', String(pitch.durationTicks))
@@ -707,7 +813,9 @@ function drawOneGrace(
   const y = noteCenterY(system, grace.staff, grace.midi, step)
   const direction = defaultStemDirection([step])
   if (system === 'midgard') {
-    for (const ledgerY of midgardLedgerYs(grace.midi)) drawLedgerSpan(svg, x - STAFF_SPACE, x + STAFF_SPACE, ledgerY, INK)
+    for (const ledgerY of midgardLedgerYs(grace.midi)) {
+      drawLedgerSpan(svg, x - STAFF_SPACE, x + STAFF_SPACE, ledgerY, MIDGARD_MEASURE_LINE)
+    }
   } else {
     drawLedgerLines(svg, x, step, bottomY, INK)
   }
@@ -725,6 +833,7 @@ function drawOneGrace(
   head.setAttribute('data-staff', grace.staff)
   head.setAttribute('data-principal-start', String(grace.principal.startTick))
   head.setAttribute('data-principal-midi', String(grace.principal.midi))
+  if (system === 'midgard') head.setAttribute('data-time-x', String(principalX))
   svg.append(head)
 
   const stem = graceStem({ headX: x, headY: y, staffStep: step, noteRadiusX: NOTE_RX, direction })

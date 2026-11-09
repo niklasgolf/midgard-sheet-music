@@ -107,9 +107,13 @@ if (page.includes('accidental') || page.includes('♯') || page.includes('♭'))
 if (!page.includes('grandStaffFrame()')) fail('The classical staff frame was removed.')
 
 const view = readFileSync('src/notation/engraving-view.ts', 'utf8')
-if (!view.includes('measureSvg({ label, content, timeSignature, system, maxWidth })')) {
+if (!view.includes('measureSvg({')) {
   fail('Each measure is not drawn by the shared measure SVG.')
 }
+if (!view.includes("trueTime: system === 'midgard' ? trueTime : undefined")) {
+  fail('midGard does not receive its own timeline, or Classical receives one.')
+}
+if (!view.includes('maxWidth')) fail('Classical measures lost the cell width.')
 if (!view.includes("system === 'midgard' ? 'midGard Sheet Music'")) {
   fail('The midGard score does not name itself.')
 }

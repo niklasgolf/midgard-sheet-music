@@ -6,6 +6,7 @@ import {
   MIDGARD_STAFF_HEIGHT,
   MIDGARD_STAFF_WIDTH,
   MIDGARD_STROKE,
+  MIDGARD_TIME_ZERO,
   midgardGroupLines,
   midgardGroupTop,
   midgardNoteY,
@@ -195,7 +196,13 @@ function appendRule(svg: SVGSVGElement, x: number, y: number, width: number, hei
 }
 
 /** The six colored groups, stretched across one measure and not scaled vertically. */
-export function drawMidgardMeasureStaff(svg: SVGSVGElement, x1: number, x2: number): void {
+export function drawMidgardMeasureStaff(
+  svg: SVGSVGElement,
+  x1: number,
+  x2: number,
+  options?: { line?: string; margins?: { width: number; fill: string } },
+): void {
+  const lineColor = options?.line ?? LINE_INK
   for (let index = 0; index < MIDGARD_GROUP_COUNT; index += 1) {
     const lines = midgardGroupLines(index)
     const color = MIDGARD_GROUP_COLORS[index] ?? MIDGARD_PINK
@@ -205,36 +212,68 @@ export function drawMidgardMeasureStaff(svg: SVGSVGElement, x1: number, x2: numb
       if (upper === undefined || lower === undefined) continue
       appendRect(svg, x1, upper + STROKE / 2, x2 - x1, lower - upper - STROKE, color)
     }
-    for (const y of lines) appendStaffLine(svg, x1, x2, y)
+  }
+  const margins = options?.margins
+  if (margins !== undefined) {
+    const top = midgardGroupTop(0)
+    const bottom = midgardStaffBottom()
+    appendMargin(svg, x1, top, margins.width, bottom - top, margins.fill, 'left')
+    appendMargin(svg, x2 - margins.width, top, margins.width, bottom - top, margins.fill, 'right')
+  }
+  for (let index = 0; index < MIDGARD_GROUP_COUNT; index += 1) {
+    for (const y of midgardGroupLines(index)) appendStaffLine(svg, x1, x2, y, lineColor)
   }
 }
 
-/** Right barline from the top line of the upper group to the bottom line of the lower group. */
-export function drawMidgardBarline(svg: SVGSVGElement, x: number): void {
-  const top = midgardGroupTop(0)
-  const bottomLines = midgardGroupLines(MIDGARD_GROUP_COUNT - 1)
-  const bottom = bottomLines[bottomLines.length - 1] ?? top
+/** The start of a pickup, drawn through the staff. It is not a barline. */
+export function drawMidgardTimeZero(svg: SVGSVGElement, x: number, timelineTick: number): void {
   const line = document.createElementNS(SVG_NS, 'line')
   line.setAttribute('x1', String(x))
   line.setAttribute('x2', String(x))
-  line.setAttribute('y1', String(top))
-  line.setAttribute('y2', String(bottom))
-  line.setAttribute('stroke', LINE_INK)
-  line.setAttribute('stroke-width', String(STROKE))
-  line.setAttribute('data-barline', 'right')
+  line.setAttribute('y1', String(midgardGroupTop(0)))
+  line.setAttribute('y2', String(midgardStaffBottom()))
+  line.setAttribute('stroke', MIDGARD_TIME_ZERO)
+  line.setAttribute('stroke-width', '2')
+  line.setAttribute('data-time-zero', 'true')
+  line.setAttribute('data-time-tick', String(timelineTick))
+  line.setAttribute('data-time-x', String(x))
   svg.append(line)
 }
 
-function appendStaffLine(svg: SVGSVGElement, x1: number, x2: number, y: number): void {
+function midgardStaffBottom(): number {
+  const lines = midgardGroupLines(MIDGARD_GROUP_COUNT - 1)
+  return lines[lines.length - 1] ?? midgardGroupTop(0)
+}
+
+function appendStaffLine(svg: SVGSVGElement, x1: number, x2: number, y: number, lineColor: string): void {
   const line = document.createElementNS(SVG_NS, 'line')
   line.setAttribute('x1', String(x1))
   line.setAttribute('x2', String(x2))
   line.setAttribute('y1', String(y))
   line.setAttribute('y2', String(y))
-  line.setAttribute('stroke', LINE_INK)
+  line.setAttribute('stroke', lineColor)
   line.setAttribute('stroke-width', String(STROKE))
   line.setAttribute('data-midgard-line', 'true')
   svg.append(line)
+}
+
+function appendMargin(
+  svg: SVGSVGElement,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  fill: string,
+  side: 'left' | 'right',
+): void {
+  const rect = document.createElementNS(SVG_NS, 'rect')
+  rect.setAttribute('x', String(x))
+  rect.setAttribute('y', String(y))
+  rect.setAttribute('width', String(width))
+  rect.setAttribute('height', String(height))
+  rect.setAttribute('fill', fill)
+  rect.setAttribute('data-margin', side)
+  svg.append(rect)
 }
 
 function appendRect(

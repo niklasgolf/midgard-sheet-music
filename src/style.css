@@ -225,6 +225,7 @@ body {
     'row count time'
     'pickup ticks duration'
     'bottom bottom bottom'
+    'midgard-width midgard-width midgard-width'
     'save save save'
     'display-status display-status display-status'
     'settings-status settings-status settings-status';
@@ -252,6 +253,29 @@ body {
 
 .editor-display__group--count {
   grid-area: count;
+}
+
+.editor-display__group--width {
+  grid-area: midgard-width;
+}
+
+.editor-display__width {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.editor-display__width input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  accent-color: #7a4e2d;
+}
+
+.editor-display__width-value {
+  min-width: 4.5em;
+  color: #2a1a0e;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .editor-controls .settings__status {
@@ -289,6 +313,7 @@ body {
       'ticks'
       'duration'
       'bottom'
+      'midgard-width'
       'save'
       'display-status'
       'settings-status';

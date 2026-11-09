@@ -92,6 +92,22 @@
               />
             </label>
           </fieldset>
+          <fieldset class="editor-display__group editor-display__group--width">
+            <legend class="editor-display__legend" id="midgard-width-label">midGard Measure Width</legend>
+            <label class="editor-display__width">
+              <input
+                id="midgard-measure-width"
+                name="midgardMeasureWidth"
+                type="range"
+                min="200"
+                max="800"
+                step="20"
+                value="400"
+                aria-labelledby="midgard-width-label"
+              />
+              <output class="editor-display__width-value" id="midgard-measure-width-value" for="midgard-measure-width">400px</output>
+            </label>
+          </fieldset>
           <p class="settings__status" id="sheet-display-status" role="status" aria-live="polite"></p>
         </form>
       </section>

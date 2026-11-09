@@ -6,6 +6,12 @@ export const MIDGARD_STROKE = 1.25
 export const MIDGARD_PINK = '#FEEFEE'
 export const MIDGARD_BLUE = '#ECF3FD'
 export const MIDGARD_LINE = '#000000'
+/** Measure staff and ledger lines. The introduction keeps MIDGARD_LINE. */
+export const MIDGARD_MEASURE_LINE = '#888888'
+/** Margin wash behind the measure staff. It is not a musical rest. */
+export const MIDGARD_MARGIN_FILL = 'rgba(128, 128, 128, 0.10)'
+/** Pickup time zero. This is not a barline. */
+export const MIDGARD_TIME_ZERO = '#6BCB8C'
 
 const LINES_PER_ZONE = 4
 const ZONE_SPACES = LINES_PER_ZONE - 1

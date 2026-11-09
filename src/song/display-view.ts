@@ -3,7 +3,11 @@ import type { SongRepository } from './song-repository.ts'
 import {
   completeMeasureRequest,
   DEFAULT_COMPLETE_MEASURES,
+  MIDGARD_MEASURE_WIDTH_MAX,
+  MIDGARD_MEASURE_WIDTH_MIN,
+  MIDGARD_MEASURE_WIDTH_STEP,
   measuresPerRowCount,
+  midgardMeasureWidth,
   type Song,
   type SongDisplay,
 } from './song.ts'
@@ -22,7 +26,11 @@ export function mountSheetDisplay(
   const customCount = requiredField<HTMLInputElement>(form, 'customCount')
   const customField = form.querySelector<HTMLElement>('[data-custom-count]')
   const rowRadios = [...form.querySelectorAll<HTMLInputElement>('input[name="measuresPerRow"]')]
-  if (!customField || rowRadios.length !== 2) throw new Error('Sheet Music Display controls were not found')
+  const widthSlider = requiredField<HTMLInputElement>(form, 'midgardMeasureWidth')
+  const widthValue = form.querySelector<HTMLOutputElement>('#midgard-measure-width-value')
+  if (!customField || rowRadios.length !== 2 || !widthValue) {
+    throw new Error('Sheet Music Display controls were not found')
+  }
 
   let current: Song | undefined
   let filling = false
@@ -89,6 +97,30 @@ export function mountSheetDisplay(
     })
   }
 
+  const applyWidth = (text: string, persistWidth: boolean): void => {
+    if (!current) return
+    const width = parseMidgardMeasureWidth(text)
+    if (width === undefined) return
+    widthValue.textContent = `${width}px`
+    const next: Song = { ...current, display: { ...current.display, midgardMeasureWidth: width } }
+    current = next
+    if (persistWidth) {
+      save({ midgardMeasureWidth: width })
+      return
+    }
+    onSaved(next)
+  }
+
+  widthSlider.addEventListener('input', () => {
+    if (filling) return
+    applyWidth(widthSlider.value, false)
+  })
+
+  widthSlider.addEventListener('change', () => {
+    if (filling) return
+    applyWidth(widthSlider.value, true)
+  })
+
   return {
     show(song) {
       current = song
@@ -113,10 +145,26 @@ export function mountSheetDisplay(
       }
       const perRow = String(measuresPerRowCount(song))
       for (const radio of rowRadios) radio.checked = radio.value === perRow
+      const width = midgardMeasureWidth(song)
+      if (document.activeElement !== widthSlider) widthSlider.value = String(width)
+      widthValue.textContent = `${width}px`
       filling = false
       writeClamp(status, song)
     },
   }
+}
+
+function parseMidgardMeasureWidth(text: string): number | undefined {
+  const value = Number(text)
+  if (
+    !Number.isInteger(value) ||
+    value < MIDGARD_MEASURE_WIDTH_MIN ||
+    value > MIDGARD_MEASURE_WIDTH_MAX ||
+    value % MIDGARD_MEASURE_WIDTH_STEP !== 0
+  ) {
+    return undefined
+  }
+  return value
 }
 
 function isListedCount(value: string): boolean {
