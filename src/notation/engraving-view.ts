@@ -55,6 +55,7 @@ export function renderEngraving(container: HTMLElement, song: Song, system: Nota
   const grid = document.createElement('div')
   grid.className = 'engraving__grid'
   grid.dataset.columns = String(columns)
+  if (system === 'midgard') grid.dataset.notation = 'midgard'
   container.replaceChildren(title, grid)
   const maxWidth = availableSvgWidth(grid, columns)
   const measureWidth = midgardMeasureWidth(song)
@@ -136,6 +137,7 @@ function measureBlock(
 ): HTMLElement {
   const item = document.createElement('div')
   item.className = 'engraving__item'
+  if (system === 'midgard') item.dataset.notation = 'midgard'
 
   const name = document.createElement('p')
   name.className = 'engraving__label'
@@ -158,7 +160,7 @@ function measureBlock(
     writtenOnsetTick: (note) => resolveWrittenOnset(note.startTick, song.musicalInterpretation),
   })
   const frame = document.createElement('div')
-  frame.className = 'measure'
+  frame.className = system === 'midgard' ? 'measure measure--midgard' : 'measure'
   const svg = measureSvg({
     label,
     content,

@@ -104,6 +104,17 @@ const geometry = readFileSync('src/engraving/midgard-geometry.ts', 'utf8')
 if (!geometry.includes("export const MIDGARD_LINE = '#000000'")) fail('The introduction staff line color changed.')
 if (!geometry.includes("export const MIDGARD_MEASURE_LINE = '#888888'")) fail('Measure staff lines are not #888888.')
 if (!geometry.includes("export const MIDGARD_TIME_ZERO = '#6BCB8C'")) fail('The pickup time-zero line is not the lighter green.')
+const css = readFileSync('src/style.css', 'utf8')
+if (!css.includes('grid-template-columns: repeat(3, minmax(0, 1fr))')) {
+  fail('Classical rows no longer use equal flexible tracks.')
+}
+if (!css.includes("grid-template-columns: repeat(3, max-content)")) {
+  fail('midGard rows are not sized to the measures.')
+}
+if (!css.includes(".engraving__grid[data-notation='midgard']")) fail('midGard does not have its own grid.')
+const midgardGrid = css.slice(css.indexOf(".engraving__grid[data-notation='midgard']"))
+if (!midgardGrid.includes('column-gap: 0')) fail('midGard measures still have a column gap.')
+if (!view.includes("grid.dataset.notation = 'midgard'")) fail('The midGard score does not mark its grid.')
 const html = readFileSync('index.html', 'utf8')
 if (!html.includes('midGard Measure Width') || !html.includes('min="200"') || !html.includes('max="800"') || !html.includes('step="20"')) {
   fail('The midGard measure-width slider is missing or has the wrong range.')

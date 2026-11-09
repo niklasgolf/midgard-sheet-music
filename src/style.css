@@ -729,6 +729,20 @@ body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.engraving__grid[data-notation='midgard'] {
+  grid-template-columns: repeat(3, max-content);
+  column-gap: 0;
+  justify-content: start;
+  justify-items: start;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.engraving__grid[data-notation='midgard'][data-columns='2'] {
+  grid-template-columns: repeat(2, max-content);
+}
+
 .engraving__item {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -794,6 +808,25 @@ body {
   padding: 8px 4px 0;
   border: 2px solid #00ff00;
   background: transparent;
+}
+
+.engraving__item[data-notation='midgard'] {
+  grid-template-columns: max-content;
+  justify-items: start;
+  width: max-content;
+  overflow: visible;
+}
+
+.engraving__item[data-notation='midgard'] > :not(.measure) {
+  width: 0;
+  min-width: 100%;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.engraving .measure--midgard {
+  padding: 0;
+  border: 0;
 }
 
 .engraving .measure svg {
@@ -868,5 +901,9 @@ body {
     column-gap: 12px;
     row-gap: 24px;
     margin-top: 12px;
+  }
+
+  .engraving__grid[data-notation='midgard'] {
+    column-gap: 0;
   }
 }
