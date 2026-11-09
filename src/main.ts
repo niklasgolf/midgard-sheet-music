@@ -32,8 +32,8 @@ const namesReturn = document.querySelector<HTMLButtonElement>('#names-return')
 const displayForm = document.querySelector<HTMLFormElement>('#sheet-display-form')
 const displayStatus = document.querySelector<HTMLElement>('#sheet-display-status')
 const engraving = document.querySelector<HTMLElement>('#engraving')
-const midgardStaff = document.querySelector<HTMLElement>('#midgard-staff')
-const midgardStaffPreview = document.querySelector<HTMLElement>('#midgard-staff-preview')
+const midgardSystem = document.querySelector<HTMLElement>('#midgard-system')
+const midgardSystemStaffs = document.querySelector<HTMLElement>('#midgard-system-staffs')
 if (
   !referencePdf ||
   !editorHeading ||
@@ -52,8 +52,8 @@ if (
   !displayForm ||
   !displayStatus ||
   !engraving ||
-  !midgardStaff ||
-  !midgardStaffPreview
+  !midgardSystem ||
+  !midgardSystemStaffs
 ) {
   throw new Error('Song page containers were not found')
 }
@@ -69,8 +69,8 @@ const namesPanel: HTMLElement = namesPage
 const namesReturnButton: HTMLButtonElement = namesReturn
 const settingsSection = settingsForm.closest('section')
 const engravingPanel: HTMLElement = engraving
-const midgardStaffPanel: HTMLElement = midgardStaff
-mountMidgardStaff(midgardStaffPreview)
+const midgardSystemPanel: HTMLElement = midgardSystem
+mountMidgardStaff(midgardSystemStaffs)
 if (!settingsSection) throw new Error('Song Settings were not found')
 const settingsPanel: HTMLElement = settingsSection
 
@@ -127,7 +127,6 @@ ensureProjectSongs(songs)
     renderSongStatusError(storagePanel, message)
     settingsStatus.textContent = message
     engravingPanel.replaceChildren()
-    midgardStaffPanel.hidden = true
   })
 
 function showLibrary(): void {
@@ -242,7 +241,7 @@ function clearOpenSong(): void {
   pdfFrame.removeAttribute('src')
   pdfFrame.title = 'Original sheet music'
   engravingPanel.replaceChildren()
-  midgardStaffPanel.hidden = true
+  midgardSystemPanel.hidden = false
   storagePanel.replaceChildren()
 }
 
@@ -269,6 +268,6 @@ function showPdf(song: Song): void {
 
 function renderStoredSong(load: SongLoad): void {
   renderSongStatus(storagePanel, load)
-  midgardStaffPanel.hidden = false
+  midgardSystemPanel.hidden = true
   renderEngraving(engravingPanel, load.song)
 }

@@ -68,7 +68,7 @@ function rightHandNoteOffset(): number {
   return -6 * SPACE
 }
 
-/** Puts the experimental staffs into the preview. It does not read a Song. */
+/** Puts the introduction staffs into Choose a Song. It does not read a Song. */
 export function mountMidgardStaff(container: HTMLElement): void {
   container.replaceChildren(
     staffCopy({ octave: 3 }),

@@ -619,30 +619,26 @@ body {
   line-height: 1.35;
 }
 
-.midgard-staff {
-  margin: 0 0 36px;
+.midgard-system {
+  display: grid;
+  justify-items: start;
+  row-gap: 20px;
+  margin: 0;
+  color: #2a1a0e;
 }
 
-.midgard-staff[hidden] {
+.midgard-system[hidden] {
   display: none;
 }
 
-.midgard-staff__title {
-  margin: 0 0 12px;
-  color: #2a1a0e;
+.midgard-system__title {
+  margin: 0;
   font-size: 26px;
   font-weight: 600;
   line-height: 1.25;
 }
 
-.midgard-staff__layout {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  column-gap: 32px;
-  align-items: start;
-}
-
-.midgard-staff__preview {
+.midgard-system__staffs {
   display: grid;
   grid-template-columns: repeat(2, max-content);
   column-gap: 32px;
@@ -650,29 +646,23 @@ body {
   justify-items: start;
 }
 
-.midgard-staff__explain {
-  max-width: 22rem;
-  color: #2a1a0e;
+.midgard-system__text {
+  max-width: 44rem;
 }
 
-.midgard-staff__explain-title {
-  margin: 0 0 8px;
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 1.3;
+.midgard-system__text p {
+  margin: 0 0 12px;
 }
 
-.midgard-staff__explain p {
-  margin: 0 0 8px;
-  font-size: 14px;
-  line-height: 1.4;
+.midgard-system__text p:last-child {
+  margin-bottom: 0;
 }
 
 .midgard-staff__copy {
   min-width: 0;
 }
 
-.midgard-staff__preview svg {
+.midgard-system__staffs svg {
   display: block;
   width: auto;
   height: auto;
